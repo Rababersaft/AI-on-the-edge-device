@@ -1,5 +1,7 @@
-#ifndef __CFINDTEMPLATE_CLASS
-#define __CFINDTEMPLATE_CLASS
+#pragma once
+
+#ifndef CFINDTEMPLATE_H
+#define CFINDTEMPLATE_H
 
 #include "CImageBasis.h"
 
@@ -20,7 +22,7 @@ struct RefInfo {
     int fastalg_max = -1;
     float fastalg_SAD = -1;
     float fastalg_SAD_criteria = -1;
-    int alignment_algo = 0;             // 0 = "Default" (nur R-Kanal), 1 = "HighAccurity" (RGB-Kanal), 2 = "Fast" (1.x RGB, dann isSimilar)
+    int alignment_algo = 0;             // 0 = "Default" (nur R-Kanal), 1 = "HighAccuracy" (RGB-Kanal), 2 = "Fast" (1.x RGB, dann isSimilar)
 };
 
 
@@ -37,4 +39,4 @@ class CFindTemplate : public CImageBasis
         bool CalculateSimularities(uint8_t* _rgb_tmpl, int _startx, int _starty, int _sizex, int _sizey, int &min, float &avg, int &max, float &SAD, float _SADold, float _SADcrit);
 };
 
-#endif
+#endif //CFINDTEMPLATE_H

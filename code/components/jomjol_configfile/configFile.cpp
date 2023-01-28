@@ -4,13 +4,16 @@
 
 #include "Helper.h"
 #include "configFile.h"
+#include <esp_log.h>
 
-//static const char *TAGCONFIGFILE = "configFile";
+#include "../../include/defines.h"
+
+static const char *TAG = "CONFIG";
 
 ConfigFile::ConfigFile(std::string filePath)
 {
     std::string config = FormatFileName(filePath);
-    pFile = OpenFileAndWait(config.c_str(), "r");
+    pFile = fopen(config.c_str(), "r");
 }
 
 ConfigFile::~ConfigFile()
@@ -48,7 +51,7 @@ bool ConfigFile::getNextLine(std::string *rt, bool &disabled, bool &eof)
 
 	if (fgets(zw, 1024, pFile))
 	{
-		printf("%s", zw);
+		ESP_LOGD(TAG, "%s", zw);
 		if ((strlen(zw) == 0) && feof(pFile))
 		{
 			*rt = "";
@@ -64,10 +67,10 @@ bool ConfigFile::getNextLine(std::string *rt, bool &disabled, bool &eof)
 	}
 	*rt = zw;
 	*rt = trim(*rt);
-	while ((zw[0] == ';' || zw[0] == '#' || (rt->size() == 0)) && !(zw[1] == '['))			// Kommentarzeilen (; oder #) und Leerzeilen überspringen, es sei denn es ist ein neuer auskommentierter Paragraph
+	while ((zw[0] == ';' || zw[0] == '#' || (rt->size() == 0)) && !(zw[1] == '['))
 	{
 		fgets(zw, 1024, pFile);
-		printf("%s", zw);		
+		ESP_LOGD(TAG, "%s", zw);
 		if (feof(pFile))
 		{
 			*rt = "";
@@ -80,26 +83,4 @@ bool ConfigFile::getNextLine(std::string *rt, bool &disabled, bool &eof)
 
     disabled = ((*rt)[0] == ';');
 	return true;
-}
-
-std::vector<string> ConfigFile::ZerlegeZeile(std::string input, std::string delimiter)
-{
-	std::vector<string> Output;
-//	std::string delimiter = " =,";
-
-	input = trim(input, delimiter);
-	size_t pos = findDelimiterPos(input, delimiter);
-	std::string token;
-	while (pos != std::string::npos) {
-		token = input.substr(0, pos);
-		token = trim(token, delimiter);
-		Output.push_back(token);
-		input.erase(0, pos + 1);
-		input = trim(input, delimiter);
-		pos = findDelimiterPos(input, delimiter);
-	}
-	Output.push_back(input);
-
-	return Output;
-
 }

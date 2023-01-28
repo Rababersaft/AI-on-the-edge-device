@@ -40,6 +40,12 @@ const char* GIT_TAG=\"${GIT_TAG}\";
 const char* GIT_BRANCH=\"${GIT_BRANCH}\";
 const char* BUILD_TIME=\"${BUILD_TIME}\";")
 
+if ("${GIT_TAG}" STREQUAL "") # Tag not set, show branch
+    set(VERSION_HTML "Development-Branch: ${GIT_BRANCH} (Commit: ${GIT_REV}${GIT_DIFF})\n${GIT_REV}")
+else() # Tag is set, ignore branch
+    set(VERSION_HTML "Release: ${GIT_TAG} (Commit: ${GIT_REV}${GIT_DIFF})\n${GIT_REV}")
+endif()
+
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/version.cpp)
     file(READ ${CMAKE_CURRENT_SOURCE_DIR}/version.cpp VERSION_)
 else()
@@ -48,6 +54,7 @@ endif()
 
 if (NOT "${VERSION}" STREQUAL "${VERSION_}")
     file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/version.cpp "${VERSION}")
+    file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/../sd-card/html/version.txt "${VERSION_HTML}")
 endif()
 #######################################################################
 #######################################################################
@@ -58,5 +65,6 @@ FILE(GLOB_RECURSE app_sources ${CMAKE_SOURCE_DIR}/main/*.*)
 # idf_component_register(SRCS ${app_sources})
 
 idf_component_register(SRCS ${app_sources}
-                    INCLUDE_DIRS ".")
-
+                    INCLUDE_DIRS "."
+                   # REQUIRES esp_psram) # comming in IDF 5.0
+                    )

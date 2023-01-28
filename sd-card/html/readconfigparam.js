@@ -1,7 +1,3 @@
-function readconfig_Version(){
-     return "1.0.0 - 20200910";
- }
-
 var config_gesamt = "";
 var config_split = [];
 var param = [];
@@ -11,35 +7,95 @@ var NUMBERS = new Array(0);
 var REFERENCES = new Array(0);
 
 
+function getNUMBERSList() {
+	_domainname = getDomainname(); 
+     var namenumberslist = "";
+
+	var xhttp = new XMLHttpRequest();
+	xhttp.addEventListener('load', function(event) {
+          if (xhttp.status >= 200 && xhttp.status < 300) {
+               namenumberslist = xhttp.responseText;
+          } else {
+               console.warn(request.statusText, request.responseText);
+          }
+     });
+
+     try {
+          url = _domainname + '/editflow?task=namenumbers';     
+          xhttp.open("GET", url, false);
+          xhttp.send();
+     }
+     catch (error)
+     {
+//               alert("Loading Hostname failed");
+     }
+
+     namenumberslist = namenumberslist.split("\t");
+//      namenumberslist.pop();
+
+     return namenumberslist;
+}
+
+
+function getDATAList() {
+	_domainname = getDomainname(); 
+     datalist = "";
+
+	var xhttp = new XMLHttpRequest();
+	xhttp.addEventListener('load', function(event) {
+          if (xhttp.status >= 200 && xhttp.status < 300) {
+               datalist = xhttp.responseText;
+          } else {
+               console.warn(request.statusText, request.responseText);
+          }
+     });
+
+     try {
+          url = _domainname + '/editflow?task=data';     
+          xhttp.open("GET", url, false);
+          xhttp.send();
+     }
+     catch (error)
+     {
+//               alert("Loading Hostname failed");
+     }
+
+     datalist = datalist.split("\t");
+     datalist.pop();
+     datalist.sort();
+
+     return datalist;
+}
+
+
 function getTFLITEList() {
-	_basepath = getbasepath(); 
+	_domainname = getDomainname(); 
      tflitelist = "";
 
 	var xhttp = new XMLHttpRequest();
 	xhttp.addEventListener('load', function(event) {
-	  if (xhttp.status >= 200 && xhttp.status < 300) {
-		tflitelist = xhttp.responseText;
-	  } else {
-		 console.warn(request.statusText, request.responseText);
-	  }
-	 });
+          if (xhttp.status >= 200 && xhttp.status < 300) {
+               tflitelist = xhttp.responseText;
+          } else {
+               console.warn(request.statusText, request.responseText);
+          }
+     });
 
-	 try {
-		  url = _basepath + '/editflow.html?task=tflite';     
-		  xhttp.open("GET", url, false);
-		  xhttp.send();
-
-	 }
-	 catch (error)
-	 {
+     try {
+          url = _domainname + '/editflow?task=tflite';
+          xhttp.open("GET", url, false);
+          xhttp.send();
+     }
+     catch (error)
+     {
 //               alert("Loading Hostname failed");
-	 }
+     }
 
-      tflitelist = tflitelist.split("\t");
-      tflitelist.pop();
+     tflitelist = tflitelist.split("\t");
+     tflitelist.pop();
 
-      return tflitelist;
-  }
+     return tflitelist;
+}
 
 
 function ParseConfig() {
@@ -57,6 +113,7 @@ function ParseConfig() {
      ParamAddValue(param, catname, "LogImageLocation");
      ParamAddValue(param, catname, "WaitBeforeTakingPicture");
      ParamAddValue(param, catname, "LogfileRetentionInDays");
+     ParamAddValue(param, catname, "Demo");
      ParamAddValue(param, catname, "Brightness");
      ParamAddValue(param, catname, "Contrast");
      ParamAddValue(param, catname, "Saturation");
@@ -83,9 +140,9 @@ function ParseConfig() {
      category[catname]["found"] = false;
      param[catname] = new Object();
      ParamAddValue(param, catname, "Model");
+     ParamAddValue(param, catname, "CNNGoodThreshold", 1); 
      ParamAddValue(param, catname, "LogImageLocation");
      ParamAddValue(param, catname, "LogfileRetentionInDays");
-     ParamAddValue(param, catname, "ModelInputSize", 2);     
 
      var catname = "Analog";
      category[catname] = new Object(); 
@@ -95,7 +152,6 @@ function ParseConfig() {
      ParamAddValue(param, catname, "Model");
      ParamAddValue(param, catname, "LogImageLocation");
      ParamAddValue(param, catname, "LogfileRetentionInDays");
-     ParamAddValue(param, catname, "ModelInputSize", 2);
 
      var catname = "PostProcessing";
      category[catname] = new Object(); 
@@ -103,9 +159,10 @@ function ParseConfig() {
      category[catname]["found"] = false;
      param[catname] = new Object();
      ParamAddValue(param, catname, "DecimalShift", 1, true);
+     ParamAddValue(param, catname, "AnalogDigitalTransitionStart", 1, true);
      ParamAddValue(param, catname, "PreValueUse");
      ParamAddValue(param, catname, "PreValueAgeStartup");
-     ParamAddValue(param, catname, "AllowNegativeRates");
+     ParamAddValue(param, catname, "AllowNegativeRates", 1, true);
      ParamAddValue(param, catname, "MaxRateValue", 1, true);
      ParamAddValue(param, catname, "MaxRateType", 1, true);
      ParamAddValue(param, catname, "ExtendedResolution", 1, true);
@@ -124,7 +181,21 @@ function ParseConfig() {
      ParamAddValue(param, catname, "ClientID");
      ParamAddValue(param, catname, "user");
      ParamAddValue(param, catname, "password");
-     
+     ParamAddValue(param, catname, "SetRetainFlag");
+     ParamAddValue(param, catname, "HomeassistantDiscovery");
+     ParamAddValue(param, catname, "MeterType");
+
+     var catname = "InfluxDB";
+     category[catname] = new Object(); 
+     category[catname]["enabled"] = false;
+     category[catname]["found"] = false;
+     param[catname] = new Object();
+     ParamAddValue(param, catname, "Uri");
+     ParamAddValue(param, catname, "Database");
+     ParamAddValue(param, catname, "Measurement");
+     ParamAddValue(param, catname, "user");
+     ParamAddValue(param, catname, "password");
+    
      var catname = "GPIO";
      category[catname] = new Object(); 
      category[catname]["enabled"] = false;
@@ -155,6 +226,14 @@ function ParseConfig() {
      ParamAddValue(param, catname, "AutoStart");
      ParamAddValue(param, catname, "Intervall");     
 
+     var catname = "DataLogging";
+     category[catname] = new Object(); 
+     category[catname]["enabled"] = false;
+     category[catname]["found"] = false;
+     param[catname] = new Object();
+     ParamAddValue(param, catname, "DataLogActive");
+     ParamAddValue(param, catname, "DataLogRetentionInDays");     
+
      var catname = "Debug";
      category[catname] = new Object(); 
      category[catname]["enabled"] = false;
@@ -172,6 +251,7 @@ function ParseConfig() {
      ParamAddValue(param, catname, "TimeServer");         
      ParamAddValue(param, catname, "AutoAdjustSummertime");
      ParamAddValue(param, catname, "Hostname");   
+     ParamAddValue(param, catname, "RSSIThreashold");   
      ParamAddValue(param, catname, "SetupMode"); 
      
      
@@ -200,6 +280,46 @@ function ParseConfig() {
           param["MQTT"]["MainTopic"] = param["MQTT"]["Topic"]
      }
      delete param["MQTT"]["Topic"]                // Dient nur der Downwardskompatibilität
+
+
+     if (param["Debug"]["Logfile"]["value1"] == "false" || param["Debug"]["Logfile"]["value1"] == "true")
+     {
+          param["Debug"]["Logfile"]["value1"] = "2";
+     }
+
+
+     // Make the downward compatiblity with MQTT (Maintopic --> topic)
+     if (category["DataLogging"]["found"] == false)
+     {
+          category["DataLogging"]["found"] = true;
+          category["DataLogging"]["enabled"] = true;
+
+          param["DataLogging"]["DataLogActive"]["found"] = true;
+          param["DataLogging"]["DataLogActive"]["enabled"] = true;
+          param["DataLogging"]["DataLogActive"]["value1"] = "true";
+          
+          param["DataLogging"]["DataLogRetentionInDays"]["found"] = true;
+          param["DataLogging"]["DataLogRetentionInDays"]["enabled"] = true;
+          param["DataLogging"]["DataLogRetentionInDays"]["value1"] = "3";
+     }
+
+     if (category["DataLogging"]["enabled"] == false)
+          category["DataLogging"]["enabled"] = true
+
+     if (param["DataLogging"]["DataLogActive"]["enabled"] == false && param["DataLogging"]["DataLogActive"]["value1"] == "")
+     {
+          param["DataLogging"]["DataLogActive"]["found"] = true;
+          param["DataLogging"]["DataLogActive"]["enabled"] = true;
+          param["DataLogging"]["DataLogActive"]["value1"] = "true";
+     }
+
+     if (param["DataLogging"]["DataLogRetentionInDays"]["enabled"] == false && param["DataLogging"]["DataLogRetentionInDays"]["value1"] == "")
+     {
+          param["DataLogging"]["DataLogRetentionInDays"]["found"] = true;
+          param["DataLogging"]["DataLogRetentionInDays"]["enabled"] = true;
+          param["DataLogging"]["DataLogRetentionInDays"]["value1"] = "3";
+     }
+
 }
 
 function ParamAddValue(param, _cat, _param, _anzParam = 1, _isNUMBER = false, _checkRegExList = null){
@@ -222,9 +342,9 @@ function ParseConfigParamAll(_aktline, _catname){
           let [isCom, input] = isCommented(_input);
           var linesplit = ZerlegeZeile(input);
           ParamExtractValueAll(param, linesplit, _catname, _aktline, isCom);
-          if (!isCom && (linesplit.length == 5) && (_catname == 'Digits'))
+          if (!isCom && (linesplit.length >= 5) && (_catname == 'Digits'))
                ExtractROIs(input, "digit");
-          if (!isCom && (linesplit.length == 5) && (_catname == 'Analog'))
+          if (!isCom && (linesplit.length >= 5) && (_catname == 'Analog'))
                ExtractROIs(input, "analog");
           if (!isCom && (linesplit.length == 3) && (_catname == 'Alignment'))
           {
@@ -384,6 +504,7 @@ function WriteConfigININew()
                               text = text + " " + NUMBERS[_roi]["digit"][_roiddet]["y"];
                               text = text + " " + NUMBERS[_roi]["digit"][_roiddet]["dx"];
                               text = text + " " + NUMBERS[_roi]["digit"][_roiddet]["dy"];
+                              text = text + " " + NUMBERS[_roi]["digit"][_roiddet]["CCW"];
                               config_split.push(text);
                          }
                     }
@@ -402,6 +523,7 @@ function WriteConfigININew()
                               text = text + " " + NUMBERS[_roi]["analog"][_roiddet]["y"];
                               text = text + " " + NUMBERS[_roi]["analog"][_roiddet]["dx"];
                               text = text + " " + NUMBERS[_roi]["analog"][_roiddet]["dy"];
+                              text = text + " " + NUMBERS[_roi]["analog"][_roiddet]["CCW"];
                               config_split.push(text);
                          }
                     }
@@ -434,7 +556,7 @@ function isCommented(input)
           return [isComment, input];
      }    
 
-function SaveConfigToServer(_basepath){
+function SaveConfigToServer(_domainname){
      // leere Zeilen am Ende löschen
      var zw = config_split.length - 1;
      while (config_split[zw] == "") {
@@ -447,8 +569,8 @@ function SaveConfigToServer(_basepath){
           config_gesamt = config_gesamt + config_split[i] + "\n";
      } 
 
-     FileDeleteOnServer("/config/config.ini", _basepath);
-     FileSendContent(config_gesamt, "/config/config.ini", _basepath);          
+     FileDeleteOnServer("/config/config.ini", _domainname);
+     FileSendContent(config_gesamt, "/config/config.ini", _domainname);          
 }
 	 
 function getConfig() {
@@ -470,6 +592,9 @@ function ExtractROIs(_aktline, _type){
      abc["dx"] = linesplit[3];
      abc["dy"] = linesplit[4];
      abc["ar"] = parseFloat(linesplit[3]) / parseFloat(linesplit[4]);
+     abc["CCW"] = "false";
+     if (linesplit.length >= 6)
+          abc["CCW"] = linesplit[5];
 }
 
 
@@ -534,19 +659,19 @@ function getNUMBERS(_name, _type, _create = true)
 
  
 
-function CopyReferenceToImgTmp(_basepath)
+function CopyReferenceToImgTmp(_domainname)
 {
      for (index = 0; index < 2; ++index)
      {
           _filenamevon = REFERENCES[index]["name"];
           _filenamenach = _filenamevon.replace("/config/", "/img_tmp/");
-          FileDeleteOnServer(_filenamenach, _basepath);
-          FileCopyOnServer(_filenamevon, _filenamenach, _basepath);
+          FileDeleteOnServer(_filenamenach, _domainname);
+          FileCopyOnServer(_filenamevon, _filenamenach, _domainname);
      
           _filenamevon = _filenamevon.replace(".jpg", "_org.jpg");
           _filenamenach = _filenamenach.replace(".jpg", "_org.jpg");
-          FileDeleteOnServer(_filenamenach, _basepath);
-          FileCopyOnServer(_filenamevon, _filenamenach, _basepath);
+          FileDeleteOnServer(_filenamenach, _domainname);
+          FileCopyOnServer(_filenamevon, _filenamenach, _domainname);
      }
 }
 
@@ -555,18 +680,18 @@ function GetReferencesInfo(){
 }
 
 
-function UpdateConfigReference(_basepath){
+function UpdateConfigReference(_domainname){
      for (var index = 0; index < 2; ++index)
      {
           _filenamenach = REFERENCES[index]["name"];
           _filenamevon = _filenamenach.replace("/config/", "/img_tmp/");
-          FileDeleteOnServer(_filenamenach, _basepath);
-          FileCopyOnServer(_filenamevon, _filenamenach, _basepath);
+          FileDeleteOnServer(_filenamenach, _domainname);
+          FileCopyOnServer(_filenamevon, _filenamenach, _domainname);
      
           _filenamenach = _filenamenach.replace(".jpg", "_org.jpg");
           _filenamevon = _filenamevon.replace(".jpg", "_org.jpg");
-          FileDeleteOnServer(_filenamenach, _basepath);
-          FileCopyOnServer(_filenamevon, _filenamenach, _basepath);
+          FileDeleteOnServer(_filenamenach, _domainname);
+          FileCopyOnServer(_filenamevon, _filenamenach, _domainname);
 
      }
 }
@@ -577,6 +702,11 @@ function getNUMBERInfo(){
 }
 
 function RenameNUMBER(_alt, _neu){
+     if ((_neu.indexOf(".") >= 0) || (_neu.indexOf(",") >= 0) || (_neu.indexOf(" ") >= 0) || (_neu.indexOf("\"") >= 0))
+     {
+          return "Name must not contain ',', '.', ' ' or '\"' - please change name";
+     }
+
      index = -1;
      found = false;
      for (i = 0; i < NUMBERS.length; ++i) {
@@ -658,6 +788,14 @@ function getROIInfo(_typeROI, _number){
 
 
 function RenameROI(_number, _type, _alt, _neu){
+     if ((_neu.includes("=")) || (_neu.includes(".")) || (_neu.includes(":")) ||
+         (_neu.includes(",")) || (_neu.includes(";")) || (_neu.includes(" ")) || 
+         (_neu.includes("\""))) {
+          return "Name must not contain any of the following characters: . : , ; = \" ' '";
+     }
+
+
+
      index = -1;
      found = false;
      _indexnumber = -1;
@@ -698,7 +836,7 @@ function DeleteNUMBER(_delte){
      return "";
 }
 
-function CreateROI(_number, _type, _pos, _roinew, _x, _y, _dx, _dy){
+function CreateROI(_number, _type, _pos, _roinew, _x, _y, _dx, _dy, _CCW){
      _indexnumber = -1;
      for (j = 0; j < NUMBERS.length; ++j)
           if (NUMBERS[j]["name"] == _number)
@@ -721,6 +859,7 @@ function CreateROI(_number, _type, _pos, _roinew, _x, _y, _dx, _dy){
      _ret["dx"] = _dx;
      _ret["dy"] = _dy;
      _ret["ar"] = _dx / _dy;
+     _ret["CCW"] = _CCW;
 
      NUMBERS[_indexnumber][_type].splice(_pos+1, 0, _ret);
 

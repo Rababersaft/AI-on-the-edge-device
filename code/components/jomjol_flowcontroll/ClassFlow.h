@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef CLASSFLOW_H
+#define CLASSFLOW_H
+
 #include <fstream>
 #include <string>
 #include <vector>
@@ -8,10 +11,6 @@
 #include "CImageBasis.h"
 
 using namespace std;
-
-#define LOGFILE_TIME_FORMAT "%Y%m%d-%H%M%S"
-#define LOGFILE_TIME_FORMAT_DATE_EXTR substr(0, 8)
-#define LOGFILE_TIME_FORMAT_HOUR_EXTR substr(9, 2)
 
 struct HTMLInfo
 {
@@ -26,8 +25,6 @@ struct HTMLInfo
 class ClassFlow
 {
 protected:
-//	std::vector<string> ZerlegeZeile(string input);
-	std::vector<string> ZerlegeZeile(string input, string delimiter = " =, \t");
 	bool isNewParagraph(string input);
 	bool GetNextParagraph(FILE* pfile, string& aktparamgraph);
 	bool getNextLine(FILE* pfile, string* rt);
@@ -54,3 +51,4 @@ public:
 
 };
 
+#endif //CLASSFLOW_H

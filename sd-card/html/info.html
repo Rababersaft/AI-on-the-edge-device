@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Set PreValue</title>
+<link rel="icon" href="favicon.ico?v=$COMMIT_HASH" type="image/x-icon">
+<title>Info</title>
 <meta charset="utf-8">
 
 <style>
@@ -11,7 +12,7 @@ h3 {font-size: 1.2em;}
 p {font-size: 1em;}
 
 div {
-	width: 250px;
+	width: 350px;
     padding: 10px 5px;
     border: 1px solid #ccc;
 	font-family: arial;
@@ -24,33 +25,75 @@ div {
 </head>
 
 <body style="font-family: arial; padding: 0px 10px;">
-<h3>Current</h3>
+<h3>Runtime Information</h3>
 <table style="font-family: arial">
 	<tr>
 		<td>
 			Last restart:
 		</td>
 		<td>
-			<div id="gitbranch">
+			<div id="starttime">
 				<object data="/starttime"></object>
 			</div>
 		</td>
 	</tr>
-	</table>
+	<tr>
+		<td>
+			Uptime:
+		</td>
+		<td>
+			<div id="uptime">
+				<object data="/uptime"></object>
+			</div>
+		</td>
+	</tr>
+</table>
 
-
+<h3>Build Info</h3>
 <table style="font-family: arial">
+  <tr>
+	<td>
+		Firmware Version:
+	</td>
+	<td>
+		<div id="firmware" style="width: 700px">
+		    <object data="/info?type=FirmwareVersion" style="width: 700px"></object>
+		</div>
+	</td>
+  </tr>
+  <tr>
+	<td>
+		Firmware Build Time:
+	</td>
+	<td>
+		<div id="build-time">
+			<object data="/info?type=BuildTime"></object>
+		</div>
+	</td>
+  </tr>
+
+	<tr>
+	<td>
+		Web Interface Version:
+	</td>
+	<td>
+		    <div id="web-ui" style="width: 700px">
+			<object data="/info?type=HTMLVersion" style="width: 700px"></object>
+		</div>
+	</td>
+  </tr>
+</table>
+
+
 <h3>Host Info</h3>
-
-
 <table style="font-family: arial">
 	<tr>
 		<td>
 			Hostname:
 		</td>
 		<td>
-			<div id="gitbranch">
-				<object data="/version?type=Hostname"></object>
+			<div id="Hostname">
+				<object data="/info?type=Hostname"></object>
 			</div>
 		</td>
 	</tr>
@@ -59,8 +102,8 @@ div {
 			IP-Address:
 		</td>	
 		<td>
-			<div id="gitbranch">
-				<object data="/version?type=IP"></object>
+			<div id="IP">
+				<object data="/info?type=IP"></object>
 			</div>
 		</td>
 	</tr>
@@ -69,72 +112,89 @@ div {
 			WLan-SSID:
 		</td>	
 		<td>
-			<div id="gitbranch">
-				<object data="/version?type=SSID"></object>
+			<div id="SSID">
+				<object data="/info?type=SSID"></object>
 			</div>
 		</td>
 	</tr>
 </table>
 
-<h3>Version Info</h3>
-
+<h3>SD Card Info</h3>
 <table style="font-family: arial">
-  <tr>
-	<td>
-		Git-Branch:
-	</td>
-	<td>
-		<div id="gitbranch">
-			<object data="/version?type=GitBranch"></object>
-		</div>
-	</td>
-  </tr>
-
-  <tr>
-	<td>
-		Git-Base-Branch:
-	</td>
-	<td>
-		<div>
-			<object data="/version?type=GitBaseBranch"></object>
-		</div>
-	</td>
-  </tr>
-
-  <tr>
-	<td>
-		Git-Version:
-	</td>
-	<td>
-		<div>
-			<object data="/version?type=GitVersion"></object>
-		</div>
-	</td>
-  </tr>
-
-  <tr>
-	<td>
-		Build Time:
-	</td>
-	<td>
-		<div>
-			<object data="/version?type=BuildTime"></object>
-		</div>
-	</td>
-  </tr>
-
 	<tr>
-	<td>
-		HTML Version:
-	</td>
-	<td>
-		<div>
-			<object data="/version?type=HTMLVersion"></object>
-		</div>
-	</td>
-  </tr>
+		<td>
+			SD Card Manufacturer:
+		</td>
+		<td>
+			<div id="SDCardManufacturer">
+				<object data="/info?type=SDCardManufacturer"></object>
+			</div>
+		</td>
+	</tr>
+	<tr>
+		<td>
+			SD Card Name:
+		</td>
+		<td>
+			<div id="SDCardName">
+				<object data="/info?type=SDCardName"></object>
+			</div>
+		</td>
+	</tr>
+	<tr>
+		<td>
+			SD Card Size [MB]:
+		</td>
+		<td>
+			<div id="SDCardCapacity">
+				<object data="/info?type=SDCardCapacity"></object>
+			</div>
+		</td>
+	</tr>
+	<tr>
+		<td>
+			SD Card Sector Size [byte]:
+		</td>
+		<td>
+			<div id="SDCardSectorSize">
+				<object data="/info?type=SDCardSectorSize"></object>
+			</div>
+		</td>
+	</tr>
+	<tr>
+		<td>
+			Partition Size [MB]:
+		</td>
+		<td>
+			<div id="SDPartitionSize">
+				<object data="/info?type=SDCardPartitionSize"></object>
+			</div>
+		</td>
+	</tr>
+	<tr>
+		<td>
+			Partition Free Space [MB]:
+		</td>	
+		<td>
+			<div id="SDFreePartitionSpace">
+				<object data="/info?type=SDCardFreePartitionSpace"></object>
+			</div>
+		</td>
+	</tr>
+	<tr>
+		<td>
+			Partition Allocation Size [byte]:
+		</td>	
+		<td>
+			<div id="SDCardPartitionAllocationSize">
+				<object data="/info?type=SDCardPartitionAllocationSize"></object>
+			</div>
+		</td>
+	</tr>
 </table>
 
+<h3>Copyright</h3>
+Copyright &copy; 2020 - 2022 by <a href="https://github.com/jomjol/AI-on-the-edge-device" target=_blank>Jomjol</a> and others.
 
 </body>
 </html>

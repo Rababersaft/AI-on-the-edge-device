@@ -3,7 +3,10 @@
 #include <string>
 #include <iostream>
 #include <string.h>
+#include "esp_log.h"
+#include "../../include/defines.h"
 
+static const char *TAG = "CLASS";
 
 
 void ClassFlow::SetInitialParameter(void)
@@ -11,31 +14,6 @@ void ClassFlow::SetInitialParameter(void)
 	ListFlowControll = NULL;
 	previousElement = NULL;	
 	disabled = false;
-}
-
-
-
-
-std::vector<string> ClassFlow::ZerlegeZeile(std::string input, std::string delimiter)
-{
-	std::vector<string> Output;
-//	std::string delimiter = " =,";
-
-	input = trim(input, delimiter);
-	size_t pos = findDelimiterPos(input, delimiter);
-	std::string token;
-	while (pos != std::string::npos) {
-		token = input.substr(0, pos);
-		token = trim(token, delimiter);
-		Output.push_back(token);
-		input.erase(0, pos + 1);
-		input = trim(input, delimiter);
-		pos = findDelimiterPos(input, delimiter);
-	}
-	Output.push_back(input);
-
-	return Output;
-
 }
 
 bool ClassFlow::isNewParagraph(string input)
@@ -106,7 +84,7 @@ std::string ClassFlow::GetParameterName(std::string _input)
     {
         _param = _input;
     }
-//    printf("Parameter: %s, Pospunkt: %d\n", _param.c_str(), _pospunkt);
+//    ESP_LOGD(TAG, "Parameter: %s, Pospunkt: %d", _param.c_str(), _pospunkt);
 	return _param;
 }
 
@@ -122,18 +100,18 @@ bool ClassFlow::getNextLine(FILE* pfile, string *rt)
 	if (!fgets(zw, 1024, pfile))
 	{
 		*rt = "";
-		printf("END OF FILE\n");
+		ESP_LOGD(TAG, "END OF FILE");
 		return false;
 	}
-	printf("%s", zw);
+	ESP_LOGD(TAG, "%s", zw);
 	*rt = zw;
 	*rt = trim(*rt);
-	while ((zw[0] == ';' || zw[0] == '#' || (rt->size() == 0)) && !(zw[1] == '['))			// Kommentarzeilen (; oder #) und Leerzeilen überspringen, es sei denn es ist ein neuer auskommentierter Paragraph
+	while ((zw[0] == ';' || zw[0] == '#' || (rt->size() == 0)) && !(zw[1] == '['))
 	{
 		*rt = "";
 		if (!fgets(zw, 1024, pfile))
 			return false;
-		printf("%s", zw);		
+		ESP_LOGD(TAG, "%s", zw);
 		*rt = zw;
 		*rt = trim(*rt);
 	}

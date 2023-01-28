@@ -4,7 +4,13 @@
 .code-workspace
 /sd-card/htm./.vscode/
 /code/build
-
+/code/.helper
+/sd-card/html/debug/
+/firmware/
+version.txt
+/dist/
+/dist_release/
+/dist_old_ota
 CMakeLists.txt.user
 CMakeCache.txt
 CMakeFiles
@@ -15,3 +21,5 @@ install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
 _deps
+code/edgeAI.code-workspace
+.DS_Store

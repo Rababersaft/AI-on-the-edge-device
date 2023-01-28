@@ -10,7 +10,10 @@
 #include <sstream>
 #include <iostream>
 #include <string.h>
+#include "esp_log.h"
+#include "../../include/defines.h"
 
+static const char *TAG = "WLAN.INI";
 
 std::vector<string> ZerlegeZeileWLAN(std::string input, std::string _delimiter = "")
 {
@@ -23,7 +26,7 @@ std::vector<string> ZerlegeZeileWLAN(std::string input, std::string _delimiter =
 	input = trim(input, delimiter);
 	size_t pos = findDelimiterPos(input, delimiter);
 	std::string token;
-    if (pos != std::string::npos)           // Zerlegt nur bis ersten Gleichheitszeichen !!! Sonderfall für WLAN.ini
+    if (pos != std::string::npos)           // splitted only up to first equal sign !!! Special case for WLAN.ini
     {
 		token = input.substr(0, pos);
 		token = trim(token, delimiter);
@@ -38,7 +41,7 @@ std::vector<string> ZerlegeZeileWLAN(std::string input, std::string _delimiter =
 
 
 
-void LoadWlanFromFile(std::string fn, char *&_ssid, char *&_password, char *&_hostname, char *&_ipadr, char *&_gw,  char *&_netmask, char *&_dns)
+bool LoadWlanFromFile(std::string fn, char *&_ssid, char *&_password, char *&_hostname, char *&_ipadr, char *&_gw,  char *&_netmask, char *&_dns, int &_rssithreashold)
 {
     std::string ssid = "";
     std::string passphrase = "";
@@ -46,19 +49,23 @@ void LoadWlanFromFile(std::string fn, char *&_ssid, char *&_password, char *&_ho
     std::string gw = "";
     std::string netmask = "";
     std::string dns = "";
+    int rssithreshold = 0;
 
     std::string line = "";
-    std::vector<string> zerlegt;
+    std::vector<string> splitted;
     hostname = std_hostname;
 
     FILE* pFile;
     fn = FormatFileName(fn);
 
-    pFile = OpenFileAndWait(fn.c_str(), "r");
-    printf("file loaded\n");
+    pFile = fopen(fn.c_str(), "r");
+    if (!pFile)
+        return false;
+
+    ESP_LOGD(TAG, "file loaded");
 
     if (pFile == NULL)
-        return;
+        return false;
 
     char zw[1024];
     fgets(zw, 1024, pFile);
@@ -66,54 +73,63 @@ void LoadWlanFromFile(std::string fn, char *&_ssid, char *&_password, char *&_ho
 
     while ((line.size() > 0) || !(feof(pFile)))
     {
-//        printf("%s", line.c_str());
-        zerlegt = ZerlegeZeileWLAN(line, "=");
-        zerlegt[0] = trim(zerlegt[0], " ");
+//        ESP_LOGD(TAG, "%s", line.c_str());
+        splitted = ZerlegeZeileWLAN(line, "=");
+        splitted[0] = trim(splitted[0], " ");
 
-        if ((zerlegt.size() > 1) && (toUpper(zerlegt[0]) == "HOSTNAME")){
-            hostname = trim(zerlegt[1]);
+        if ((splitted.size() > 1) && (toUpper(splitted[0]) == "HOSTNAME")){
+            hostname = trim(splitted[1]);
             if ((hostname[0] == '"') && (hostname[hostname.length()-1] == '"')){
                 hostname = hostname.substr(1, hostname.length()-2);
             }
         }
 
-        if ((zerlegt.size() > 1) && (toUpper(zerlegt[0]) == "SSID")){
-            ssid = trim(zerlegt[1]);
+        if ((splitted.size() > 1) && (toUpper(splitted[0]) == "SSID")){
+            ssid = trim(splitted[1]);
             if ((ssid[0] == '"') && (ssid[ssid.length()-1] == '"')){
                 ssid = ssid.substr(1, ssid.length()-2);
             }
         }
 
-        if ((zerlegt.size() > 1) && (toUpper(zerlegt[0]) == "PASSWORD")){
-            passphrase = zerlegt[1];
+        if ((splitted.size() > 1) && (toUpper(splitted[0]) == "RSSITHREASHOLD")){
+            string _s = trim(splitted[1]);
+            if ((_s[0] == '"') && (_s[_s.length()-1] == '"')){
+                _s = _s.substr(1, ssid.length()-2);
+            }
+            rssithreshold = atoi(_s.c_str());
+        }
+
+
+        if ((splitted.size() > 1) && (toUpper(splitted[0]) == "PASSWORD")){
+            passphrase = splitted[1];
             if ((passphrase[0] == '"') && (passphrase[passphrase.length()-1] == '"')){
                 passphrase = passphrase.substr(1, passphrase.length()-2);
             }
         }
 
-        if ((zerlegt.size() > 1) && (toUpper(zerlegt[0]) == "IP")){
-            ipaddress = zerlegt[1];
+        if ((splitted.size() > 1) && (toUpper(splitted[0]) == "IP")){
+            ipaddress = splitted[1];
             if ((ipaddress[0] == '"') && (ipaddress[ipaddress.length()-1] == '"')){
                 ipaddress = ipaddress.substr(1, ipaddress.length()-2);
             }
         }
 
-        if ((zerlegt.size() > 1) && (toUpper(zerlegt[0]) == "GATEWAY")){
-            gw = zerlegt[1];
+        if ((splitted.size() > 1) && (toUpper(splitted[0]) == "GATEWAY")){
+            gw = splitted[1];
             if ((gw[0] == '"') && (gw[gw.length()-1] == '"')){
                 gw = gw.substr(1, gw.length()-2);
             }
         }
 
-        if ((zerlegt.size() > 1) && (toUpper(zerlegt[0]) == "NETMASK")){
-            netmask = zerlegt[1];
+        if ((splitted.size() > 1) && (toUpper(splitted[0]) == "NETMASK")){
+            netmask = splitted[1];
             if ((netmask[0] == '"') && (netmask[netmask.length()-1] == '"')){
                 netmask = netmask.substr(1, netmask.length()-2);
             }
         }
 
-        if ((zerlegt.size() > 1) && (toUpper(zerlegt[0]) == "DNS")){
-            dns = zerlegt[1];
+        if ((splitted.size() > 1) && (toUpper(splitted[0]) == "DNS")){
+            dns = splitted[1];
             if ((dns[0] == '"') && (dns[dns.length()-1] == '"')){
                 dns = dns.substr(1, dns.length()-2);
             }
@@ -177,6 +193,10 @@ void LoadWlanFromFile(std::string fn, char *&_ssid, char *&_password, char *&_ho
     }
     else
         _dns = NULL;
+
+    _rssithreashold = rssithreshold;
+    RSSIThreashold = rssithreshold;
+    return true;
 }
 
 
@@ -188,7 +208,7 @@ bool ChangeHostName(std::string fn, std::string _newhostname)
         return false;
 
     string line = "";
-    std::vector<string> zerlegt;
+    std::vector<string> splitted;
 
     bool found = false;
 
@@ -196,9 +216,9 @@ bool ChangeHostName(std::string fn, std::string _newhostname)
 
     FILE* pFile;
     fn = FormatFileName(fn);
-    pFile = OpenFileAndWait(fn.c_str(), "r");
+    pFile = fopen(fn.c_str(), "r");
 
-    printf("file loaded\n");
+    ESP_LOGD(TAG, "file loaded\n");
 
     if (pFile == NULL)
         return false;
@@ -209,11 +229,11 @@ bool ChangeHostName(std::string fn, std::string _newhostname)
 
     while ((line.size() > 0) || !(feof(pFile)))
     {
-        printf("%s", line.c_str());
-        zerlegt = ZerlegeZeileWLAN(line, "=");
-        zerlegt[0] = trim(zerlegt[0], " ");
+        ESP_LOGD(TAG, "%s", line.c_str());
+        splitted = ZerlegeZeileWLAN(line, "=");
+        splitted[0] = trim(splitted[0], " ");
 
-        if ((zerlegt.size() > 1) && (toUpper(zerlegt[0]) == "HOSTNAME")){
+        if ((splitted.size() > 1) && (toUpper(splitted[0]) == "HOSTNAME")){
             line = "hostname = \"" + _newhostname + "\"\n";
             found = true;
         }
@@ -238,17 +258,89 @@ bool ChangeHostName(std::string fn, std::string _newhostname)
 
     fclose(pFile);
 
-    pFile = OpenFileAndWait(fn.c_str(), "w+");
+    pFile = fopen(fn.c_str(), "w+");
 
     for (int i = 0; i < neuesfile.size(); ++i)
     {
-        printf(neuesfile[i].c_str());
+        ESP_LOGD(TAG, "%s", neuesfile[i].c_str());
         fputs(neuesfile[i].c_str(), pFile);
     }
 
     fclose(pFile);
 
-    printf("*** Update hostname done ***\n");
+    ESP_LOGD(TAG, "*** Hostname update done ***");
+
+    return true;
+}
+
+
+bool ChangeRSSIThreashold(std::string fn, int _newrssithreashold)
+{
+    if (RSSIThreashold == _newrssithreashold)
+        return false;
+
+    string line = "";
+    std::vector<string> splitted;
+
+    bool found = false;
+
+    std::vector<string> neuesfile;
+
+    FILE* pFile;
+    fn = FormatFileName(fn);
+    pFile = fopen(fn.c_str(), "r");
+
+    ESP_LOGD(TAG, "file loaded\n");
+
+    if (pFile == NULL)
+        return false;
+
+    char zw[1024];
+    fgets(zw, 1024, pFile);
+    line = std::string(zw);
+
+    while ((line.size() > 0) || !(feof(pFile)))
+    {
+        ESP_LOGD(TAG, "%s", line.c_str());
+        splitted = ZerlegeZeileWLAN(line, "=");
+        splitted[0] = trim(splitted[0], " ");
+
+        if ((splitted.size() > 1) && (toUpper(splitted[0]) == "RSSITHREASHOLD")){
+            line = "RSSIThreashold = " + to_string(_newrssithreashold) + "\n";
+            found = true;
+        }
+
+        neuesfile.push_back(line);
+
+        if (fgets(zw, 1024, pFile) == NULL)
+        {
+            line = "";
+        }
+        else
+        {
+            line = std::string(zw);
+        }
+    }
+
+    if (!found)
+    {
+        line = "RSSIThreashold = " + to_string(_newrssithreashold) + "\n";
+        neuesfile.push_back(line);        
+    }
+
+    fclose(pFile);
+
+    pFile = fopen(fn.c_str(), "w+");
+
+    for (int i = 0; i < neuesfile.size(); ++i)
+    {
+        ESP_LOGD(TAG, "%s", neuesfile[i].c_str());
+        fputs(neuesfile[i].c_str(), pFile);
+    }
+
+    fclose(pFile);
+
+    ESP_LOGD(TAG, "*** RSSIThreashold update done ***");
 
     return true;
 }

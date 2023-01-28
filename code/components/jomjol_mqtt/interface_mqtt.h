@@ -1,3 +1,7 @@
+#ifdef ENABLE_MQTT
+
+#pragma once
+
 #ifndef INTERFACE_MQTT_H
 #define INTERFACE_MQTT_H
 
@@ -5,14 +9,16 @@
 #include <map>
 #include <functional>
 
-void MQTTInit(std::string _mqttURI, std::string _clientid, std::string _user, std::string _password, std::string _LWTContext, int _keepalive);
-void MQTTdestroy();
+bool MQTT_Configure(std::string _mqttURI, std::string _clientid, std::string _user, std::string _password,
+                    std::string _maintopic, std::string _lwt, std::string _lwt_connected, std::string _lwt_disconnected,
+                    int _keepalive, int SetRetainFlag, void *callbackOnConnected);
+int MQTT_Init();
+void MQTTdestroy_client(bool _disable);
 
-//void MQTTInit(std::string _mqttURI, std::string _clientid, std::string _user = "", std::string _password = "");
+bool MQTTPublish(std::string _key, std::string _content, int retained_flag = 1);            // retained Flag as Standart
 
-void MQTTPublish(std::string _key, std::string _content, int retained_flag = 0);
-
-bool MQTTisConnected();
+bool getMQTTisEnabled();
+bool getMQTTisConnected();
 
 void MQTTregisterConnectFunction(std::string name, std::function<void()> func);
 void MQTTunregisterConnectFunction(std::string name);
@@ -21,3 +27,4 @@ void MQTTdestroySubscribeFunction();
 void MQTTconnected();
 
 #endif //INTERFACE_MQTT_H
+#endif //#ENABLE_MQTT

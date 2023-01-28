@@ -1,4 +1,10 @@
+#ifdef ENABLE_MQTT
+
 #pragma once
+
+#ifndef CLASSFFLOWMQTT_H
+#define CLASSFFLOWMQTT_H
+
 #include "ClassFlow.h"
 
 #include "ClassFlowPostProcessing.h"
@@ -13,9 +19,11 @@ protected:
     std::string OldValue;
 	ClassFlowPostProcessing* flowpostprocessing;  
     std::string user, password; 
-    bool MQTTenable;
+    int SetRetainFlag;
+    int keepAlive; // Seconds
+    float roundInterval; // Minutes
 
-    std::string maintopic, mainerrortopic; 
+    std::string maintopic; 
 	void SetInitialParameter(void);        
 
 public:
@@ -24,9 +32,11 @@ public:
     ClassFlowMQTT(std::vector<ClassFlow*>* lfc, ClassFlow *_prev);
 
     string GetMQTTMainTopic();
+    bool Start(float AutoIntervall);
 
     bool ReadParameter(FILE* pfile, string& aktparamgraph);
     bool doFlow(string time);
     string name(){return "ClassFlowMQTT";};
 };
-
+#endif //CLASSFFLOWMQTT_H
+#endif //ENABLE_MQTT

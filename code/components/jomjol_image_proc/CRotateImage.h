@@ -1,3 +1,8 @@
+#pragma once
+
+#ifndef CROTATEIMAGE_H
+#define CROTATEIMAGE_H
+
 #include "CImageBasis.h"
 
 
@@ -11,7 +16,13 @@ class CRotateImage: public CImageBasis
         CRotateImage(CImageBasis *_org, CImageBasis *_temp, bool _flip = false);
 
         void Rotate(float _angle);
+        void RotateAntiAliasing(float _angle);
+       
         void Rotate(float _angle, int _centerx, int _centery);
+        void RotateAntiAliasing(float _angle, int _centerx, int _centery);
+
         void Translate(int _dx, int _dy);
         void Mirror();
 };
+
+#endif //CROTATEIMAGE_H

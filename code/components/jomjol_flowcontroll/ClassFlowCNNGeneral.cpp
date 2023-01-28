@@ -7,16 +7,25 @@
 
 #include "CTfLiteClass.h"
 #include "ClassLogFile.h"
+#include "esp_log.h"
+#include "../../include/defines.h"
 
-static const char* TAG = "flow_analog";
+static const char* TAG = "CNN";
 
-bool debugdetailgeneral = false;
+//#ifdef CONFIG_HEAP_TRACING_STANDALONE
+#ifdef HEAP_TRACING_CLASS_FLOW_CNN_GENERAL_DO_ALING_AND_CUT
+    #include <esp_heap_trace.h>
+    #define NUM_RECORDS 300
+    static heap_trace_record_t trace_record[NUM_RECORDS]; // This buffer must be in internal RAM
+#endif
+
 
 ClassFlowCNNGeneral::ClassFlowCNNGeneral(ClassFlowAlignment *_flowalign, t_CNNType _cnntype) : ClassFlowImage(NULL, TAG)
 {
     string cnnmodelfile = "";
     modelxsize = 1;
     modelysize = 1;
+    CNNGoodThreshold = 0.0;
     ListFlowControll = NULL;
     previousElement = NULL;   
     SaveAllFiles = false; 
@@ -25,30 +34,33 @@ ClassFlowCNNGeneral::ClassFlowCNNGeneral(ClassFlowAlignment *_flowalign, t_CNNTy
     CNNType = AutoDetect;
     CNNType = _cnntype;
     flowpostalignment = _flowalign;
+    logfileRetentionInDays = 5;
 }
 
-string ClassFlowCNNGeneral::getReadout(int _analog = 0, bool _extendedResolution = false)
+
+string ClassFlowCNNGeneral::getReadout(int _analog = 0, bool _extendedResolution, int prev, float _before_narrow_Analog, float analogDigitalTransitionStart)
 {
     string result = "";    
+
     if (GENERAL[_analog]->ROI.size() == 0)
         return result;
-
-    if (CNNType == Analogue)
+    LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "getReadout _analog=" + std::to_string(_analog) + ", _extendedResolution=" + std::to_string(_extendedResolution) + ", prev=" + std::to_string(prev));
+ 
+    if (CNNType == Analogue || CNNType == Analogue100)
     {
-        float zahl = GENERAL[_analog]->ROI[GENERAL[_analog]->ROI.size() - 1]->result_float;
-        int ergebnis_nachkomma = ((int) floor(zahl * 10) + 10) % 10;
-
-        int prev = -1;
-
-        prev = ZeigerEval(GENERAL[_analog]->ROI[GENERAL[_analog]->ROI.size() - 1]->result_float, prev);
+        float number = GENERAL[_analog]->ROI[GENERAL[_analog]->ROI.size() - 1]->result_float;
+        int result_after_decimal_point = ((int) floor(number * 10) + 10) % 10;
+        
+        prev = PointerEvalAnalogNew(GENERAL[_analog]->ROI[GENERAL[_analog]->ROI.size() - 1]->result_float, prev);
+//        LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "getReadout(analog) number=" + std::to_string(number) + ", result_after_decimal_point=" + std::to_string(result_after_decimal_point) + ", prev=" + std::to_string(prev));
         result = std::to_string(prev);
 
         if (_extendedResolution && (CNNType != Digital))
-            result = result + std::to_string(ergebnis_nachkomma);
+            result = result + std::to_string(result_after_decimal_point);
 
         for (int i = GENERAL[_analog]->ROI.size() - 2; i >= 0; --i)
         {
-            prev = ZeigerEval(GENERAL[_analog]->ROI[i]->result_float, prev);
+            prev = PointerEvalAnalogNew(GENERAL[_analog]->ROI[i]->result_float, prev);
             result = std::to_string(prev) + result;
         }
         return result;
@@ -66,25 +78,30 @@ string ClassFlowCNNGeneral::getReadout(int _analog = 0, bool _extendedResolution
         return result;
     }
 
-    if (CNNType == DigitalHyprid)
+    if ((CNNType == DoubleHyprid10) || (CNNType == Digital100))
     {
-        int zif_akt = -1;
 
-        float zahl = GENERAL[_analog]->ROI[GENERAL[_analog]->ROI.size() - 1]->result_float;
-        if (zahl >= 0)       // NaN?
+        float number = GENERAL[_analog]->ROI[GENERAL[_analog]->ROI.size() - 1]->result_float;
+        if (number >= 0)       // NaN?
         {
-            if (_extendedResolution)
+            if (_extendedResolution)            // is only set if it is the first digit (no analogue before!)
             {
-                int ergebnis_nachkomma = ((int) floor(zahl * 10)) % 10;
-                int ergebnis_vorkomma = ((int) floor(zahl)) % 10;
+                int result_after_decimal_point = ((int) floor(number * 10)) % 10;
+                int result_before_decimal_point = ((int) floor(number)) % 10;
 
-                result = std::to_string(ergebnis_vorkomma) + std::to_string(ergebnis_nachkomma);
-                zif_akt = ergebnis_vorkomma;
+                result = std::to_string(result_before_decimal_point) + std::to_string(result_after_decimal_point);
+                prev = result_before_decimal_point;
+                LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "getReadout(dig100-ext) result_before_decimal_point=" + std::to_string(result_before_decimal_point) + ", result_after_decimal_point=" + std::to_string(result_after_decimal_point) + ", prev=" + std::to_string(prev));
             }
             else
             {
-                zif_akt = ZeigerEvalHybrid(GENERAL[_analog]->ROI[GENERAL[_analog]->ROI.size() - 1]->result_float, -1, -1);
-                result = std::to_string(zif_akt);
+                if (_before_narrow_Analog >= 0)
+                    prev = PointerEvalHybridNew(GENERAL[_analog]->ROI[GENERAL[_analog]->ROI.size() - 1]->result_float, _before_narrow_Analog, prev, true, analogDigitalTransitionStart);
+                else
+                    prev = PointerEvalHybridNew(GENERAL[_analog]->ROI[GENERAL[_analog]->ROI.size() - 1]->result_float, prev, prev);
+                result = std::to_string(prev);
+                LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "getReadout(dig100)  prev=" + std::to_string(prev));
+        
             }
         }
         else
@@ -98,88 +115,189 @@ string ClassFlowCNNGeneral::getReadout(int _analog = 0, bool _extendedResolution
         {
             if (GENERAL[_analog]->ROI[i]->result_float >= 0)
             {
-                zif_akt = ZeigerEvalHybrid(GENERAL[_analog]->ROI[i]->result_float, GENERAL[_analog]->ROI[i+1]->result_float, zif_akt);
-                result = std::to_string(zif_akt) + result;
+                prev = PointerEvalHybridNew(GENERAL[_analog]->ROI[i]->result_float, GENERAL[_analog]->ROI[i+1]->result_float, prev);
+                LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "getReadout#PointerEvalHybridNew()= " + std::to_string(prev));
+                result = std::to_string(prev) + result;
+                LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "getReadout#result= " + result);
+                
             }
             else
             {
-                zif_akt = -1;
+                prev = -1;
                 result = "N" + result;
+                LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "getReadout(result_float<0 /'N')  result_float=" + std::to_string(GENERAL[_analog]->ROI[i]->result_float));
+        
             }
         }
         return result;
     }
+    return result;
+}
+
+
+int ClassFlowCNNGeneral::PointerEvalHybridNew(float number, float number_of_predecessors, int eval_predecessors, bool Analog_Predecessors, float digitalAnalogTransitionStart)
+{
+    int result;
+    int result_after_decimal_point = ((int) floor(number * 10)) % 10;
+    int result_before_decimal_point = ((int) floor(number) + 10) % 10;
+
+    if (eval_predecessors < 0)
+    {
+        if ((result_after_decimal_point <= Digital_Uncertainty * 10) || (result_after_decimal_point >= Digital_Uncertainty * 10))     // Band around the digit --> Rounding, as digit reaches inaccuracy in the frame
+            result = (int) (round(number) + 10) % 10;
+        else
+            result = (int) ((int) trunc(number) + 10) % 10;
+
+        LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "PointerEvalHybridNew - No predecessor - Result = " + std::to_string(result) +
+                                                    " number: " + std::to_string(number) + " number_of_predecessors = " + std::to_string(number_of_predecessors)+ " eval_predecessors = " + std::to_string(eval_predecessors) + " Digital_Uncertainty = " +  std::to_string(Digital_Uncertainty));
+        return result;
+    }
+
+    if (Analog_Predecessors)
+    {
+        result = PointerEvalAnalogToDigitNew(number, number_of_predecessors, eval_predecessors, digitalAnalogTransitionStart);
+        LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "PointerEvalHybridNew - Analog predecessor, evaluation over PointerEvalAnalogNew = " + std::to_string(result) +
+                                                    " number: " + std::to_string(number) + " number_of_predecessors = " + std::to_string(number_of_predecessors)+ " eval_predecessors = " + std::to_string(eval_predecessors) + " Digital_Uncertainty = " +  std::to_string(Digital_Uncertainty));
+        return result;
+    }
+
+    if ((number_of_predecessors >= Digital_Transition_Area_Predecessor ) && (number_of_predecessors <= (10.0 - Digital_Transition_Area_Predecessor)))
+    {
+        // no digit change, because predecessor is far enough away (0+/-DigitalTransitionRangePredecessor) --> number is rounded
+        if ((result_after_decimal_point <= DigitalBand) || (result_after_decimal_point >= (10-DigitalBand)))     // Band around the digit --> Round off, as digit reaches inaccuracy in the frame
+            result = ((int) round(number) + 10) % 10;
+        else
+            result = ((int) trunc(number) + 10) % 10;
+
+        LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "PointerEvalHybridNew - NO analogue predecessor, no change of digits, as pre-decimal point far enough away = " + std::to_string(result) +
+                                                    " number: " + std::to_string(number) + " number_of_predecessors = " + std::to_string(number_of_predecessors)+ " eval_predecessors = " + std::to_string(eval_predecessors) + " Digital_Uncertainty = " +  std::to_string(Digital_Uncertainty));
+        return result;
+    }  
+
+    if (eval_predecessors <= 1)  // Zero crossing at the predecessor has taken place (! evaluation via Prev_value and not number!) --> round up here (2.8 --> 3, but also 3.1 --> 3)
+    {
+        // We simply assume that the current digit after the zero crossing of the predecessor
+        // has passed through at least half (x.5)
+        if (result_after_decimal_point > 5)
+            // The current digit does not yet have a zero crossing, but the predecessor does..
+            result =  (result_before_decimal_point + 1) % 10;
+        else
+            // Act. digit and predecessor have zero crossing
+            result =  result_before_decimal_point % 10;
+        LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "PointerEvalHybridNew - NO analogue predecessor, zero crossing has taken placen = " + std::to_string(result) +
+                                                    " number: " + std::to_string(number) + " number_of_predecessors = " + std::to_string(number_of_predecessors)+ " eval_predecessors = " + std::to_string(eval_predecessors) + " Digital_Uncertainty = " +  std::to_string(Digital_Uncertainty));
+        return result;
+    }
+
+    
+    // remains only >= 9.x --> no zero crossing yet --> 2.8 --> 2, 
+    // and from 9.7(DigitalTransitionRangeLead) 3.1 --> 2
+    // everything >=x.4 can be considered as current number in transition. With 9.x predecessor the current
+    // number can still be x.6 - x.7. 
+    // Preceding (else - branch) does not already happen from 9.
+    if (Digital_Transition_Area_Forward>=number_of_predecessors || result_after_decimal_point >= 4)
+        // The current digit, like the previous digit, does not yet have a zero crossing. 
+        result =  result_before_decimal_point % 10;
+    else
+        // current digit precedes the smaller digit (9.x). So already >=x.0 while the previous digit has not yet
+        // has no zero crossing. Therefore, it is reduced by 1.
+        result =  (result_before_decimal_point - 1 + 10) % 10;
+
+    LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "PointerEvalHybridNew - O analogue predecessor, >= 9.5 --> no zero crossing yet = " + std::to_string(result) +
+                                                " number: " + std::to_string(number) + " number_of_predecessors = " + std::to_string(number_of_predecessors)+ " eval_predecessors = " + std::to_string(eval_predecessors) + " Digital_Uncertainty = " +  std::to_string(Digital_Uncertainty) + " result_after_decimal_point = " + std::to_string(result_after_decimal_point));
+    return result;
+}
+
+
+int ClassFlowCNNGeneral::PointerEvalAnalogToDigitNew(float number, float numeral_preceder,  int eval_predecessors, float analogDigitalTransitionStart)
+{
+    int result;
+    int result_after_decimal_point = ((int) floor(number * 10)) % 10;
+    int result_before_decimal_point = ((int) floor(number) + 10) % 10;
+    bool roundedUp = false;
+
+    // Within the digital inequalities 
+    if ((result_after_decimal_point >= (10-Digital_Uncertainty * 10))     // Band around the digit --> Round off, as digit reaches inaccuracy in the frame
+        || (eval_predecessors <= 4 && result_after_decimal_point>=6))  {   // or digit runs after (analogue =0..4, digit >=6)
+        result = (int) (round(number) + 10) % 10;
+        roundedUp = true;
+        // before/ after decimal point, because we adjust the number based on the uncertainty.
+        result_after_decimal_point = ((int) floor(result * 10)) % 10;
+        result_before_decimal_point = ((int) floor(result) + 10) % 10;
+        LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "PointerEvalAnalogToDigitNew - Digital Uncertainty - Result = " + std::to_string(result) +
+                                                    " number: " + std::to_string(number) + " numeral_preceder: " + std::to_string(numeral_preceder) +
+                                                    " erg before comma: " + std::to_string(result_before_decimal_point) + 
+                                                    " erg after comma: " + std::to_string(result_after_decimal_point));
+    } else {
+        result = (int) ((int) trunc(number) + 10) % 10;
+        LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "PointerEvalAnalogToDigitNew - NO digital Uncertainty - Result = " + std::to_string(result) +
+                                                    " number: " + std::to_string(number) + " numeral_preceder = " + std::to_string(numeral_preceder));
+    }
+
+    // No zero crossing has taken place.
+    // Only eval_predecessors used because numeral_preceder could be wrong here.
+    // numeral_preceder<=0.1 & eval_predecessors=9 corresponds to analogue was reset because of previous analogue that are not yet at 0.
+    if ((eval_predecessors>=6 && (numeral_preceder>analogDigitalTransitionStart || numeral_preceder<=0.2) && roundedUp))
+    {
+        result =  ((result_before_decimal_point+10) - 1) % 10;
+        LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "PointerEvalAnalogToDigitNew - Nulldurchgang noch nicht stattgefunden = " + std::to_string(result) +
+                                    " number: " + std::to_string(number) + 
+                                    " numeral_preceder = " + std::to_string(numeral_preceder) + 
+                                    " eerg after comma = " +  std::to_string(result_after_decimal_point));
+
+    }
+
+    return result;
+
+}
+
+
+int ClassFlowCNNGeneral::PointerEvalAnalogNew(float number, int numeral_preceder)
+{
+    float number_min, number_max;
+    int result;
+
+    if (numeral_preceder == -1)
+    {
+        result = (int) floor(number);
+        LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "PointerEvalAnalogNew - No predecessor - Result = " + std::to_string(result) +
+                                                    " number: " + std::to_string(number) + " numeral_preceder = " + std::to_string(numeral_preceder) + " Analog_error = " +  std::to_string(Analog_error));
+        return result;
+    }
+
+    number_min = number - Analog_error / 10.0;
+    number_max = number + Analog_error / 10.0;
+
+    if ((int) floor(number_max) - (int) floor(number_min) != 0)
+    {
+        if (numeral_preceder <= Analog_error)
+        {
+            result = ((int) floor(number_max) + 10) % 10;
+            LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "PointerEvalAnalogNew - number ambiguous, correction upwards - result = " + std::to_string(result) +
+                                                        " number: " + std::to_string(number) + " numeral_preceder = " + std::to_string(numeral_preceder) + " Analog_error = " +  std::to_string(Analog_error));
+            return result;
+        }
+        if (numeral_preceder >= 10 - Analog_error)
+        {
+            result = ((int) floor(number_min) + 10) % 10;
+            LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "PointerEvalAnalogNew - number ambiguous, downward correction - result = " + std::to_string(result) +
+                                                        " number: " + std::to_string(number) + " numeral_preceder = " + std::to_string(numeral_preceder) + " Analog_error = " +  std::to_string(Analog_error));
+            return result;
+        }
+    }
+    
+
+    result = ((int) floor(number) + 10) % 10;
+    LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "PointerEvalAnalogNew - number unambiguous, no correction necessary - result = " + std::to_string(result) +
+                                                " number: " + std::to_string(number) + " numeral_preceder = " + std::to_string(numeral_preceder) + " Analog_error = " +  std::to_string(Analog_error));
 
     return result;
 }
 
-int ClassFlowCNNGeneral::ZeigerEvalHybrid(float zahl, float zahl_vorgaenger, int eval_vorgaenger)
-{
-    int ergebnis_nachkomma = ((int) floor(zahl * 10)) % 10;
-
-    if (zahl_vorgaenger < 0)                // keine Vorzahl vorhanden !!! --> Runde die Zahl
-    {
-        if ((ergebnis_nachkomma <= 2) || (ergebnis_nachkomma >= 8))     // Band um die Ziffer --> Runden, da Ziffer im Rahmen Ungenauigkeit erreicht
-            return ((int) round(zahl) + 10) % 10;
-        else
-            return ((int) trunc(zahl) + 10) % 10;
-    }
-
-    if (zahl_vorgaenger > 9.2)              // Ziffernwechsel beginnt
-    {
-        if (eval_vorgaenger == 0)           // Wechsel hat schon stattgefunden
-        {
-            return ((int) round(zahl) + 10) % 10;      // Annahme, dass die neue Zahl schon in der Nähe des Ziels ist
-        }
-        else
-        {
-            if (zahl_vorgaenger <= 9.5)     // Wechsel startet gerade, aber beginnt erst
-            {
-                if ((ergebnis_nachkomma <= 2) || (ergebnis_nachkomma >= 8))     // Band um die Ziffer --> Runden, da Ziffer im Rahmen Ungenauigkeit erreicht
-                    return ((int) round(zahl) + 10) % 10;
-                else
-                    return ((int) trunc(zahl) + 10) % 10;
-            }
-            else
-            {
-                return ((int) trunc(zahl) + 10) % 10;   // Wechsel schon weiter fortgeschritten, d.h. über 2 als Nachkomma
-            }
-        }
-    }
-
-    if ((ergebnis_nachkomma <= 2) || (ergebnis_nachkomma >= 8))     // Band um die Ziffer --> Runden, da Ziffer im Rahmen Ungenauigkeit erreicht
-        return ((int) round(zahl) + 10) % 10;
-
-    return ((int) trunc(zahl) + 10) % 10;
-}
-
-int ClassFlowCNNGeneral::ZeigerEval(float zahl, int ziffer_vorgaenger)
-{
-    int ergebnis_nachkomma = ((int) floor(zahl * 10) + 10) % 10;
-    int ergebnis_vorkomma = ((int) floor(zahl) + 10) % 10;
-    int ergebnis, ergebnis_rating;
-
-    if (ziffer_vorgaenger == -1)
-        return ergebnis_vorkomma % 10;
-
-    ergebnis_rating = ergebnis_nachkomma - ziffer_vorgaenger;
-    if (ergebnis_nachkomma >= 5)
-        ergebnis_rating-=5;
-    else
-        ergebnis_rating+=5;
-    ergebnis = (int) round(zahl);
-    if (ergebnis_rating < 0)
-        ergebnis-=1;
-    if (ergebnis == -1)
-        ergebnis+=10;
-
-    ergebnis = (ergebnis + 10) % 10;
-    return ergebnis;
-}
 
 bool ClassFlowCNNGeneral::ReadParameter(FILE* pfile, string& aktparamgraph)
 {
-    std::vector<string> zerlegt;
+    std::vector<string> splitted;
 
     aktparamgraph = trim(aktparamgraph);
 
@@ -198,74 +316,78 @@ bool ClassFlowCNNGeneral::ReadParameter(FILE* pfile, string& aktparamgraph)
     {
         disabled = true;
         while (getNextLine(pfile, &aktparamgraph) && !isNewParagraph(aktparamgraph));
-        printf("[Analog/Digit] is disabled !!!\n");
+        ESP_LOGD(TAG, "[Analog/Digit] is disabled!");
         return true;
     }
 
 
     while (this->getNextLine(pfile, &aktparamgraph) && !this->isNewParagraph(aktparamgraph))
     {
-        zerlegt = this->ZerlegeZeile(aktparamgraph);
-        if ((zerlegt[0] == "LogImageLocation") && (zerlegt.size() > 1))
+        splitted = ZerlegeZeile(aktparamgraph);
+        if ((toUpper(splitted[0]) == "LOGIMAGELOCATION") && (splitted.size() > 1))
         {
-            this->LogImageLocation = "/sdcard" + zerlegt[1];
+            this->LogImageLocation = "/sdcard" + splitted[1];
             this->isLogImage = true;
         }
-        if ((zerlegt[0] == "LogImageSelect") && (zerlegt.size() > 1))
+        if ((toUpper(splitted[0]) == "LOGIMAGESELECT") && (splitted.size() > 1))
         {
-            LogImageSelect = zerlegt[1];
+            LogImageSelect = splitted[1];
             isLogImageSelect = true;            
         }
 
-        if ((toUpper(zerlegt[0]) == "LOGFILERETENTIONINDAYS") && (zerlegt.size() > 1))
+        if ((toUpper(splitted[0]) == "LOGFILERETENTIONINDAYS") && (splitted.size() > 1))
         {
-            this->logfileRetentionInDays = std::stoi(zerlegt[1]);
-        }
-        if ((toUpper(zerlegt[0]) == "MODELTYPE") && (zerlegt.size() > 1))
-        {
-            if (toUpper(zerlegt[1]) == "DIGITHYPRID")
-                CNNType = DigitalHyprid;
+            this->logfileRetentionInDays = std::stoi(splitted[1]);
         }
 
-        if ((zerlegt[0] == "Model") && (zerlegt.size() > 1))
+        if ((toUpper(splitted[0]) == "MODEL") && (splitted.size() > 1))
         {
-            this->cnnmodelfile = zerlegt[1];
+            this->cnnmodelfile = splitted[1];
         }
-        if ((zerlegt[0] == "ModelInputSize") && (zerlegt.size() > 2))
+        
+        if ((toUpper(splitted[0]) == "CNNGOODTHRESHOLD") && (splitted.size() > 1))
         {
-            this->modelxsize = std::stoi(zerlegt[1]);
-            this->modelysize = std::stoi(zerlegt[2]);
+            CNNGoodThreshold = std::stof(splitted[1]);
         }
-        if (zerlegt.size() >= 5)
+        if (splitted.size() >= 5)
         {
-            general* _analog = GetGENERAL(zerlegt[0], true);
+            general* _analog = GetGENERAL(splitted[0], true);
             roi* neuroi = _analog->ROI[_analog->ROI.size()-1];
-            neuroi->posx = std::stoi(zerlegt[1]);
-            neuroi->posy = std::stoi(zerlegt[2]);
-            neuroi->deltax = std::stoi(zerlegt[3]);
-            neuroi->deltay = std::stoi(zerlegt[4]);
+            neuroi->posx = std::stoi(splitted[1]);
+            neuroi->posy = std::stoi(splitted[2]);
+            neuroi->deltax = std::stoi(splitted[3]);
+            neuroi->deltay = std::stoi(splitted[4]);
+            neuroi->CCW = false;
+            if (splitted.size() >= 6)
+            {
+                neuroi->CCW = toUpper(splitted[5]) == "TRUE";
+            }
             neuroi->result_float = -1;
             neuroi->image = NULL;
             neuroi->image_org = NULL;
         }
 
-        if ((toUpper(zerlegt[0]) == "SAVEALLFILES") && (zerlegt.size() > 1))
+        if ((toUpper(splitted[0]) == "SAVEALLFILES") && (splitted.size() > 1))
         {
-            if (toUpper(zerlegt[1]) == "TRUE")
+            if (toUpper(splitted[1]) == "TRUE")
                 SaveAllFiles = true;
         }
     }
 
+    if (!getNetworkParameter())
+        return false;
 
-   for (int _ana = 0; _ana < GENERAL.size(); ++_ana)
+
+    for (int _ana = 0; _ana < GENERAL.size(); ++_ana)
         for (int i = 0; i < GENERAL[_ana]->ROI.size(); ++i)
         {
-            GENERAL[_ana]->ROI[i]->image = new CImageBasis(modelxsize, modelysize, 3);
+            GENERAL[_ana]->ROI[i]->image = new CImageBasis(modelxsize, modelysize, modelchannel);
             GENERAL[_ana]->ROI[i]->image_org = new CImageBasis(GENERAL[_ana]->ROI[i]->deltax, GENERAL[_ana]->ROI[i]->deltay, 3);
         }
 
     return true;
 }
+
 
 general* ClassFlowCNNGeneral::FindGENERAL(string _name_number)
 {
@@ -298,7 +420,7 @@ general* ClassFlowCNNGeneral::GetGENERAL(string _name, bool _create = true)
         if (GENERAL[i]->name == _analog)
             _ret = GENERAL[i];
 
-    if (!_create)         // nicht gefunden und soll auch nicht erzeugt werden
+    if (!_create)         // not found and should not be created
         return _ret;
 
     if (_ret == NULL)
@@ -313,11 +435,10 @@ general* ClassFlowCNNGeneral::GetGENERAL(string _name, bool _create = true)
 
     _ret->ROI.push_back(neuroi);
 
-    printf("GetGENERAL - GENERAL %s - roi %s\n", _analog.c_str(), _roi.c_str());
+    ESP_LOGD(TAG, "GetGENERAL - GENERAL %s - roi %s - CCW: %d", _analog.c_str(), _roi.c_str(), neuroi->CCW);
 
     return _ret;
 }
-
 
 
 string ClassFlowCNNGeneral::getHTMLSingleStep(string host)
@@ -344,9 +465,16 @@ string ClassFlowCNNGeneral::getHTMLSingleStep(string host)
 }
 
 
-
 bool ClassFlowCNNGeneral::doFlow(string time)
 {
+
+#ifdef HEAP_TRACING_CLASS_FLOW_CNN_GENERAL_DO_ALING_AND_CUT
+    //register a buffer to record the memory trace
+    ESP_ERROR_CHECK( heap_trace_init_standalone(trace_record, NUM_RECORDS) );
+    // start tracing
+    ESP_ERROR_CHECK( heap_trace_start(HEAP_TRACE_LEAKS) );
+#endif
+
     if (disabled)
       return true;
 
@@ -354,13 +482,20 @@ bool ClassFlowCNNGeneral::doFlow(string time)
         return false;
     };
 
-    if (debugdetailgeneral) LogFile.WriteToFile("ClassFlowCNNGeneral::doFlow nach Alignment");
+    LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "doFlow after alignment");
 
     doNeuralNetwork(time);
 
     RemoveOldLogs();
+
+#ifdef HEAP_TRACING_CLASS_FLOW_CNN_GENERAL_DO_ALING_AND_CUT
+    ESP_ERROR_CHECK( heap_trace_stop() );
+    heap_trace_dump(); 
+#endif   
+
     return true;
 }
+
 
 bool ClassFlowCNNGeneral::doAlignAndCut(string time)
 {
@@ -372,7 +507,7 @@ bool ClassFlowCNNGeneral::doAlignAndCut(string time)
     for (int _ana = 0; _ana < GENERAL.size(); ++_ana)
         for (int i = 0; i < GENERAL[_ana]->ROI.size(); ++i)
         {
-            printf("General %d - Align&Cut\n", i);
+            ESP_LOGD(TAG, "General %d - Align&Cut", i);
             
             caic->CutAndSave(GENERAL[_ana]->ROI[i]->posx, GENERAL[_ana]->ROI[i]->posy, GENERAL[_ana]->ROI[i]->deltax, GENERAL[_ana]->ROI[i]->deltay, GENERAL[_ana]->ROI[i]->image_org);
             if (SaveAllFiles)
@@ -387,40 +522,117 @@ bool ClassFlowCNNGeneral::doAlignAndCut(string time)
             if (SaveAllFiles)
             {
                 if (GENERAL[_ana]->name == "default")
-                    GENERAL[_ana]->ROI[i]->image->SaveToFile(FormatFileName("/sdcard/img_tmp/" + GENERAL[_ana]->ROI[i]->name + ".bmp"));
+                    GENERAL[_ana]->ROI[i]->image->SaveToFile(FormatFileName("/sdcard/img_tmp/" + GENERAL[_ana]->ROI[i]->name + ".jpg"));
                 else
-                    GENERAL[_ana]->ROI[i]->image->SaveToFile(FormatFileName("/sdcard/img_tmp/" + GENERAL[_ana]->name + "_" + GENERAL[_ana]->ROI[i]->name + ".bmp"));
+                    GENERAL[_ana]->ROI[i]->image->SaveToFile(FormatFileName("/sdcard/img_tmp/" + GENERAL[_ana]->name + "_" + GENERAL[_ana]->ROI[i]->name + ".jpg"));
             } 
         }
 
     return true;
 } 
 
+
 void ClassFlowCNNGeneral::DrawROI(CImageBasis *_zw)
 {
-    if (CNNType == Analogue)
-    {
-        int r = 0;
-        int g = 255;
-        int b = 0;
+    if (_zw->ImageOkay()) 
+    { 
+        if (CNNType == Analogue || CNNType == Analogue100)
+        {
+            int r = 0;
+            int g = 255;
+            int b = 0;
 
-        for (int _ana = 0; _ana < GENERAL.size(); ++_ana)
-            for (int i = 0; i < GENERAL[_ana]->ROI.size(); ++i)
-            {
-                _zw->drawRect(GENERAL[_ana]->ROI[i]->posx, GENERAL[_ana]->ROI[i]->posy, GENERAL[_ana]->ROI[i]->deltax, GENERAL[_ana]->ROI[i]->deltay, r, g, b, 1);
-//                _zw->drawCircle((int) (GENERAL[_ana]->ROI[i]->posx + GENERAL[_ana]->ROI[i]->deltax/2), (int)  (GENERAL[_ana]->ROI[i]->posy + GENERAL[_ana]->ROI[i]->deltay/2), (int) (GENERAL[_ana]->ROI[i]->deltax/2), r, g, b, 2);
-                _zw->drawEllipse( (int) (GENERAL[_ana]->ROI[i]->posx + GENERAL[_ana]->ROI[i]->deltax/2), (int)  (GENERAL[_ana]->ROI[i]->posy + GENERAL[_ana]->ROI[i]->deltay/2), (int) (GENERAL[_ana]->ROI[i]->deltax/2), (int) (GENERAL[_ana]->ROI[i]->deltay/2), r, g, b, 2);
-                _zw->drawLine((int) (GENERAL[_ana]->ROI[i]->posx + GENERAL[_ana]->ROI[i]->deltax/2), (int) GENERAL[_ana]->ROI[i]->posy, (int) (GENERAL[_ana]->ROI[i]->posx + GENERAL[_ana]->ROI[i]->deltax/2), (int) (GENERAL[_ana]->ROI[i]->posy + GENERAL[_ana]->ROI[i]->deltay), r, g, b, 2);
-                _zw->drawLine((int) GENERAL[_ana]->ROI[i]->posx, (int) (GENERAL[_ana]->ROI[i]->posy + GENERAL[_ana]->ROI[i]->deltay/2), (int) GENERAL[_ana]->ROI[i]->posx + GENERAL[_ana]->ROI[i]->deltax, (int) (GENERAL[_ana]->ROI[i]->posy + GENERAL[_ana]->ROI[i]->deltay/2), r, g, b, 2);
-            }
-    }
-    else
-    {
-        for (int _dig = 0; _dig < GENERAL.size(); ++_dig)
-            for (int i = 0; i < GENERAL[_dig]->ROI.size(); ++i)
-                _zw->drawRect(GENERAL[_dig]->ROI[i]->posx, GENERAL[_dig]->ROI[i]->posy, GENERAL[_dig]->ROI[i]->deltax, GENERAL[_dig]->ROI[i]->deltay, 0, 0, (255 - _dig*100), 2);
+            for (int _ana = 0; _ana < GENERAL.size(); ++_ana)
+                for (int i = 0; i < GENERAL[_ana]->ROI.size(); ++i)
+                {
+                    _zw->drawRect(GENERAL[_ana]->ROI[i]->posx, GENERAL[_ana]->ROI[i]->posy, GENERAL[_ana]->ROI[i]->deltax, GENERAL[_ana]->ROI[i]->deltay, r, g, b, 1);
+                    _zw->drawEllipse( (int) (GENERAL[_ana]->ROI[i]->posx + GENERAL[_ana]->ROI[i]->deltax/2), (int)  (GENERAL[_ana]->ROI[i]->posy + GENERAL[_ana]->ROI[i]->deltay/2), (int) (GENERAL[_ana]->ROI[i]->deltax/2), (int) (GENERAL[_ana]->ROI[i]->deltay/2), r, g, b, 2);
+                    _zw->drawLine((int) (GENERAL[_ana]->ROI[i]->posx + GENERAL[_ana]->ROI[i]->deltax/2), (int) GENERAL[_ana]->ROI[i]->posy, (int) (GENERAL[_ana]->ROI[i]->posx + GENERAL[_ana]->ROI[i]->deltax/2), (int) (GENERAL[_ana]->ROI[i]->posy + GENERAL[_ana]->ROI[i]->deltay), r, g, b, 2);
+                    _zw->drawLine((int) GENERAL[_ana]->ROI[i]->posx, (int) (GENERAL[_ana]->ROI[i]->posy + GENERAL[_ana]->ROI[i]->deltay/2), (int) GENERAL[_ana]->ROI[i]->posx + GENERAL[_ana]->ROI[i]->deltax, (int) (GENERAL[_ana]->ROI[i]->posy + GENERAL[_ana]->ROI[i]->deltay/2), r, g, b, 2);
+                }
+        }
+        else
+        {
+            for (int _dig = 0; _dig < GENERAL.size(); ++_dig)
+                for (int i = 0; i < GENERAL[_dig]->ROI.size(); ++i)
+                    _zw->drawRect(GENERAL[_dig]->ROI[i]->posx, GENERAL[_dig]->ROI[i]->posy, GENERAL[_dig]->ROI[i]->deltax, GENERAL[_dig]->ROI[i]->deltay, 0, 0, (255 - _dig*100), 2);
+        }
     }
 } 
+
+
+bool ClassFlowCNNGeneral::getNetworkParameter()
+{
+    if (disabled)
+        return true;
+
+    CTfLiteClass *tflite = new CTfLiteClass;  
+    string zwcnn = "/sdcard" + cnnmodelfile;
+    zwcnn = FormatFileName(zwcnn);
+    ESP_LOGD(TAG, "%s", zwcnn.c_str());
+    if (!tflite->LoadModel(zwcnn)) {
+        LogFile.WriteToFile(ESP_LOG_ERROR, TAG, "Can't load tflite model " + cnnmodelfile + " -> Init aborted!");
+        LogFile.WriteHeapInfo("getNetworkParameter-LoadModel");
+        delete tflite;
+        return false;
+    } 
+
+    if (!tflite->MakeAllocate()) {
+        LogFile.WriteToFile(ESP_LOG_ERROR, TAG, "Can't allocate tflite model -> Init aborted!");
+        LogFile.WriteHeapInfo("getNetworkParameter-MakeAllocate");
+        delete tflite;
+        return false;
+    }
+
+    if (CNNType == AutoDetect)
+    {
+        tflite->GetInputDimension(false);
+        modelxsize = tflite->ReadInputDimenstion(0);
+        modelysize = tflite->ReadInputDimenstion(1);
+        modelchannel = tflite->ReadInputDimenstion(2);
+
+        int _anzoutputdimensions = tflite->GetAnzOutPut();
+        switch (_anzoutputdimensions) 
+        {
+            case 2:
+                CNNType = Analogue;
+                ESP_LOGD(TAG, "TFlite-Type set to Analogue");
+                break;
+            case 10:
+                CNNType = DoubleHyprid10;
+                ESP_LOGD(TAG, "TFlite-Type set to DoubleHyprid10");
+                break;
+            case 11:
+                CNNType = Digital;
+                ESP_LOGD(TAG, "TFlite-Type set to Digital");
+                break;
+/*            case 20:
+                CNNType = DigitalHyprid10;
+                ESP_LOGD(TAG, "TFlite-Type set to DigitalHyprid10");
+                break;
+*/
+//            case 22:
+//                CNNType = DigitalHyprid;
+//                ESP_LOGD(TAG, "TFlite-Type set to DigitalHyprid");
+//                break;
+             case 100:
+                if (modelxsize==32 && modelysize == 32) {
+                    CNNType = Analogue100;
+                    ESP_LOGD(TAG, "TFlite-Type set to Analogue100");
+                } else {
+                    CNNType = Digital100;
+                    ESP_LOGD(TAG, "TFlite-Type set to Digital");
+                }
+                break;
+            default:
+                LogFile.WriteToFile(ESP_LOG_ERROR, TAG, "tflite does not fit the firmware (outout_dimension=" + std::to_string(_anzoutputdimensions) + ")");
+        }
+    }
+
+    delete tflite;
+    return true;
+}
+
 
 bool ClassFlowCNNGeneral::doNeuralNetwork(string time)
 {
@@ -432,136 +644,196 @@ bool ClassFlowCNNGeneral::doNeuralNetwork(string time)
     CTfLiteClass *tflite = new CTfLiteClass;  
     string zwcnn = "/sdcard" + cnnmodelfile;
     zwcnn = FormatFileName(zwcnn);
-    printf(zwcnn.c_str());printf("\n");
-    if (!tflite->LoadModel(zwcnn)) {
-        printf("Can't read model file /sdcard%s\n", cnnmodelfile.c_str());
-        LogFile.WriteToFile("Cannot load model");
+    ESP_LOGD(TAG, "%s", zwcnn.c_str());
 
+    if (!tflite->LoadModel(zwcnn)) {
+        LogFile.WriteToFile(ESP_LOG_ERROR, TAG, "Can't load tflite model " + cnnmodelfile + " -> Exec aborted this round!");
+        LogFile.WriteHeapInfo("doNeuralNetwork-LoadModel");
         delete tflite;
         return false;
-    } 
-    tflite->MakeAllocate();
-
-    if (CNNType == AutoDetect)
-    {
-        int _anzoutputdimensions = tflite->GetAnzOutPut();
-        switch (_anzoutputdimensions) 
-        {
-            case 2:
-                CNNType = Analogue;
-                printf("TFlite-Type set to Analogue\n");
-                break;
-            case 11:
-                CNNType = Digital;
-                printf("TFlite-Type set to Digital\n");
-                break;
-            case 20:
-                CNNType = DigitalHyprid10;
-                printf("TFlite-Type set to DigitalHyprid10\n");
-                break;
-            case 22:
-                CNNType = DigitalHyprid;
-                printf("TFlite-Type set to DigitalHyprid\n");
-                break;
-            default:
-                printf("ERROR ERROR ERROR - tflite passt nicht zur Firmware - ERROR ERROR ERROR\n");
-        }
     }
 
-    for (int _ana = 0; _ana < GENERAL.size(); ++_ana)
+    if (!tflite->MakeAllocate()) {
+        LogFile.WriteToFile(ESP_LOG_ERROR, TAG, "Can't allocate tfilte model -> Exec aborted this round!");
+        LogFile.WriteHeapInfo("doNeuralNetwork-MakeAllocate");
+        delete tflite;
+        return false;
+    }
+
+    for (int n = 0; n < GENERAL.size(); ++n) // For each NUMBER
     {
-        for (int i = 0; i < GENERAL[_ana]->ROI.size(); ++i)
+        LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "Processing Number '" + GENERAL[n]->name + "'");
+        for (int roi = 0; roi < GENERAL[n]->ROI.size(); ++roi) // For each ROI
         {
-            printf("General %d - TfLite\n", i);
+            LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "ROI #" + std::to_string(roi) + " - TfLite");
+            //ESP_LOGD(TAG, "General %d - TfLite", i);
 
             switch (CNNType) {
                 case Analogue:
+                    LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "CNN Type: Analogue");
                     {
                         float f1, f2;
                         f1 = 0; f2 = 0;
 
-                        tflite->LoadInputImageBasis(GENERAL[_ana]->ROI[i]->image);        
+                        tflite->LoadInputImageBasis(GENERAL[n]->ROI[roi]->image);        
                         tflite->Invoke();
-                        if (debugdetailgeneral) LogFile.WriteToFile("Nach Invoke");
+                        LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "After Invoke");
 
                         f1 = tflite->GetOutputValue(0);
                         f2 = tflite->GetOutputValue(1);
                         float result = fmod(atan2(f1, f2) / (M_PI * 2) + 2, 1);
-                        GENERAL[_ana]->ROI[i]->result_float = result * 10;
-                        printf("Result General(Analog)%i: %f\n", i, GENERAL[_ana]->ROI[i]->result_float); 
+                              
+                        if(GENERAL[n]->ROI[roi]->CCW)
+                            GENERAL[n]->ROI[roi]->result_float = 10 - (result * 10);
+                        else
+                            GENERAL[n]->ROI[roi]->result_float = result * 10;
+                              
+                        ESP_LOGD(TAG, "General result (Analog)%i - CCW: %d -  %f", roi, GENERAL[n]->ROI[roi]->CCW, GENERAL[n]->ROI[roi]->result_float);
                         if (isLogImage)
-                            LogImage(logPath, GENERAL[_ana]->ROI[i]->name, &GENERAL[_ana]->ROI[i]->result_float, NULL, time, GENERAL[_ana]->ROI[i]->image_org);
+                            LogImage(logPath, GENERAL[n]->ROI[roi]->name, &GENERAL[n]->ROI[roi]->result_float, NULL, time, GENERAL[n]->ROI[roi]->image_org);
                     } break;
+
                 case Digital:
+                    LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "CNN Type: Digital");
                     {
-                        GENERAL[_ana]->ROI[i]->result_klasse = 0;
-                        GENERAL[_ana]->ROI[i]->result_klasse = tflite->GetClassFromImageBasis(GENERAL[_ana]->ROI[i]->image);
-                        printf("Result General(Digit)%i: %d\n", i, GENERAL[_ana]->ROI[i]->result_klasse);
+                        GENERAL[n]->ROI[roi]->result_klasse = 0;
+                        GENERAL[n]->ROI[roi]->result_klasse = tflite->GetClassFromImageBasis(GENERAL[n]->ROI[roi]->image);
+                        ESP_LOGD(TAG, "General result (Digit)%i: %d", roi, GENERAL[n]->ROI[roi]->result_klasse);
 
                         if (isLogImage)
                         {
+                            string _imagename = GENERAL[n]->name +  "_" + GENERAL[n]->ROI[roi]->name;
                             if (isLogImageSelect)
                             {
-                                if (LogImageSelect.find(GENERAL[_ana]->ROI[i]->name) != std::string::npos)
-                                    LogImage(logPath, GENERAL[_ana]->ROI[i]->name, NULL, &GENERAL[_ana]->ROI[i]->result_klasse, time, GENERAL[_ana]->ROI[i]->image_org);
+                                if (LogImageSelect.find(GENERAL[n]->ROI[roi]->name) != std::string::npos)
+                                    LogImage(logPath, _imagename, NULL, &GENERAL[n]->ROI[roi]->result_klasse, time, GENERAL[n]->ROI[roi]->image_org);
                             }
                             else
                             {
-                                LogImage(logPath, GENERAL[_ana]->ROI[i]->name, NULL, &GENERAL[_ana]->ROI[i]->result_klasse, time, GENERAL[_ana]->ROI[i]->image_org);
+                                LogImage(logPath, _imagename, NULL, &GENERAL[n]->ROI[roi]->result_klasse, time, GENERAL[n]->ROI[roi]->image_org);
                             }
                         }
                     } break;
-                case DigitalHyprid:
+
+
+                case DoubleHyprid10:
                     {
-                        int _num, _nachkomma;
+                    LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "CNN Type: DoubleHyprid10");
+                        int _num, _numplus, _numminus;
+                        float _val, _valplus, _valminus;
+                        float _fit;
+                        float _result_save_file;
 
-                        tflite->LoadInputImageBasis(GENERAL[_ana]->ROI[i]->image);        
+                        tflite->LoadInputImageBasis(GENERAL[n]->ROI[roi]->image);        
                         tflite->Invoke();
-                        if (debugdetailgeneral) LogFile.WriteToFile("Nach Invoke");
-
-                        _num = tflite->GetOutClassification(0, 10);
-                        _nachkomma = tflite->GetOutClassification(11, 21);
-
-
-                        string _zwres = "Nach Invoke - Nummer: " + to_string(_num) + " Nachkomma: " + to_string(_nachkomma);
-                        if (debugdetailgeneral) LogFile.WriteToFile(_zwres);
-
-                        if ((_num == 10) || (_nachkomma == 10))                      // NaN detektiert
-                            GENERAL[_ana]->ROI[i]->result_float = -1;
-                        else
-                            GENERAL[_ana]->ROI[i]->result_float = fmod((double) _num + (((double)_nachkomma)-5)/10 + (double) 10, 10);
-
-                        printf("Result General(DigitalHyprid)%i: %f\n", i, GENERAL[_ana]->ROI[i]->result_float); 
-                        _zwres = "Result General(DigitalHyprid)" + to_string(i) + ": " + to_string(GENERAL[_ana]->ROI[i]->result_float);
-                        if (debugdetailgeneral) LogFile.WriteToFile(_zwres);
-
-                        if (isLogImage)
-                            LogImage(logPath, GENERAL[_ana]->ROI[i]->name, &GENERAL[_ana]->ROI[i]->result_float, NULL, time, GENERAL[_ana]->ROI[i]->image_org);
-                    } break;
-                case DigitalHyprid10:
-                    {
-                        int _num, _nachkomma;
-
-                        tflite->LoadInputImageBasis(GENERAL[_ana]->ROI[i]->image);        
-                        tflite->Invoke();
-                        if (debugdetailgeneral) LogFile.WriteToFile("Nach Invoke");
+                        LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "After Invoke");
 
                         _num = tflite->GetOutClassification(0, 9);
-                        _nachkomma = tflite->GetOutClassification(10, 19);
+                        _numplus = (_num + 1) % 10;
+                        _numminus = (_num - 1 + 10) % 10;
+
+                        _val = tflite->GetOutputValue(_num);
+                        _valplus = tflite->GetOutputValue(_numplus);
+                        _valminus = tflite->GetOutputValue(_numminus);
+
+                        float result = _num;
+
+                        if (_valplus > _valminus)
+                        {
+                            result = result + _valplus / (_valplus + _val);
+                            _fit = _val + _valplus;
+                        }
+                        else
+                        {
+                            result = result - _valminus / (_val + _valminus);
+                            _fit = _val + _valminus;
+
+                        }
+                        if (result >= 10)
+                            result = result - 10;
+                        if (result < 0)
+                            result = result + 10;
+
+                        string zw = "_num (p, m): " + to_string(_num) + " " + to_string(_numplus) + " " + to_string(_numminus);
+                        zw = zw + " _val (p, m): " + to_string(_val) + " " + to_string(_valplus) + " " + to_string(_valminus);
+                        zw = zw + " result: " + to_string(result) + " _fit: " + to_string(_fit);
+                        LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, zw);
 
 
-                        string _zwres = "Nach Invoke - Nummer: " + to_string(_num) + " Nachkomma: " + to_string(_nachkomma);
-                        if (debugdetailgeneral) LogFile.WriteToFile(_zwres);
+                        _result_save_file = result;
 
-                        GENERAL[_ana]->ROI[i]->result_float = fmod((double) _num + (((double)_nachkomma)-5)/10 + (double) 10, 10);
+                        if (_fit < CNNGoodThreshold)
+                        {
+                            GENERAL[n]->ROI[roi]->isReject = true;
+                            result = -1;
+                            _result_save_file+= 100;     // In case fit is not sufficient, the result should still be saved with "-10x.y".
+                            string zw = "Value Rejected due to Threshold (Fit: " + to_string(_fit) + ", Threshold: " + to_string(CNNGoodThreshold) + ")";
+                            LogFile.WriteToFile(ESP_LOG_WARN, TAG, zw);
+                        }
+                        else
+                        {
+                            GENERAL[n]->ROI[roi]->isReject = false;
+                        }
 
-                        printf("Result General(DigitalHyprid)%i: %f\n", i, GENERAL[_ana]->ROI[i]->result_float); 
-                        _zwres = "Result General(DigitalHyprid)" + to_string(i) + ": " + to_string(GENERAL[_ana]->ROI[i]->result_float);
-                        if (debugdetailgeneral) LogFile.WriteToFile(_zwres);
+
+                        GENERAL[n]->ROI[roi]->result_float = result;
+                        ESP_LOGD(TAG, "Result General(Analog)%i: %f", roi, GENERAL[n]->ROI[roi]->result_float);
 
                         if (isLogImage)
-                            LogImage(logPath, GENERAL[_ana]->ROI[i]->name, &GENERAL[_ana]->ROI[i]->result_float, NULL, time, GENERAL[_ana]->ROI[i]->image_org);
+                        {
+                            string _imagename = GENERAL[n]->name +  "_" + GENERAL[n]->ROI[roi]->name;
+                            if (isLogImageSelect)
+                            {
+                                if (LogImageSelect.find(GENERAL[n]->ROI[roi]->name) != std::string::npos)
+                                    LogImage(logPath, _imagename, &_result_save_file, NULL, time, GENERAL[n]->ROI[roi]->image_org);
+                            }
+                            else
+                            {
+                                LogImage(logPath, _imagename, &_result_save_file, NULL, time, GENERAL[n]->ROI[roi]->image_org);
+                            }
+                        }
+                    }
+                    break;
+                case Digital100:
+                case Analogue100:
+                    {
+                    LogFile.WriteToFile(ESP_LOG_DEBUG, TAG, "CNN Type: Digital100 or Analogue100");
+                        int _num;
+                        float _result_save_file;
+                        
+                        tflite->LoadInputImageBasis(GENERAL[n]->ROI[roi]->image);        
+                        tflite->Invoke();
+    
+                        _num = tflite->GetOutClassification();
+                        
+                        if(GENERAL[n]->ROI[roi]->CCW)
+                            GENERAL[n]->ROI[roi]->result_float = 10 - ((float)_num / 10.0);                              
+                        else
+                            GENERAL[n]->ROI[roi]->result_float = (float)_num / 10.0;
+
+                        _result_save_file = GENERAL[n]->ROI[roi]->result_float;
+
+                        
+                        GENERAL[n]->ROI[roi]->isReject = false;
+                        
+                        ESP_LOGD(TAG, "Result General(Analog)%i - CCW: %d -  %f", roi, GENERAL[n]->ROI[roi]->CCW, GENERAL[n]->ROI[roi]->result_float);
+
+                        if (isLogImage)
+                        {
+                            string _imagename = GENERAL[n]->name +  "_" + GENERAL[n]->ROI[roi]->name;
+                            if (isLogImageSelect)
+                            {
+                                if (LogImageSelect.find(GENERAL[n]->ROI[roi]->name) != std::string::npos)
+                                    LogImage(logPath, _imagename, &_result_save_file, NULL, time, GENERAL[n]->ROI[roi]->image_org);
+                            }
+                            else
+                            {
+                                LogImage(logPath, _imagename, &_result_save_file, NULL, time, GENERAL[n]->ROI[roi]->image_org);
+                            }
+                        }
+
                     } break;
+            
                 default:
                     break;
             }
@@ -573,6 +845,7 @@ bool ClassFlowCNNGeneral::doNeuralNetwork(string time)
     return true;
 }
 
+
 bool ClassFlowCNNGeneral::isExtendedResolution(int _number)
 {
     if (!(CNNType == Digital))
@@ -582,7 +855,6 @@ bool ClassFlowCNNGeneral::isExtendedResolution(int _number)
 }
 
 
-
 std::vector<HTMLInfo*> ClassFlowCNNGeneral::GetHTMLInfo()
 {
     std::vector<HTMLInfo*> result;
@@ -590,21 +862,24 @@ std::vector<HTMLInfo*> ClassFlowCNNGeneral::GetHTMLInfo()
     for (int _ana = 0; _ana < GENERAL.size(); ++_ana)
         for (int i = 0; i < GENERAL[_ana]->ROI.size(); ++i)
         {
+            ESP_LOGD(TAG, "Image: %d", (int) GENERAL[_ana]->ROI[i]->image);
+            if (GENERAL[_ana]->ROI[i]->image)
+            {
                 if (GENERAL[_ana]->name == "default")
-                    GENERAL[_ana]->ROI[i]->image->SaveToFile(FormatFileName("/sdcard/img_tmp/" + GENERAL[_ana]->ROI[i]->name + ".bmp"));
+                    GENERAL[_ana]->ROI[i]->image->SaveToFile(FormatFileName("/sdcard/img_tmp/" + GENERAL[_ana]->ROI[i]->name + ".jpg"));
                 else
-                    GENERAL[_ana]->ROI[i]->image->SaveToFile(FormatFileName("/sdcard/img_tmp/" + GENERAL[_ana]->name + "_" + GENERAL[_ana]->ROI[i]->name + ".bmp"));
-
+                    GENERAL[_ana]->ROI[i]->image->SaveToFile(FormatFileName("/sdcard/img_tmp/" + GENERAL[_ana]->name + "_" + GENERAL[_ana]->ROI[i]->name + ".jpg"));
+            }
 
             HTMLInfo *zw = new HTMLInfo;
             if (GENERAL[_ana]->name == "default")
             {
-                zw->filename = GENERAL[_ana]->ROI[i]->name + ".bmp";
+                zw->filename = GENERAL[_ana]->ROI[i]->name + ".jpg";
                 zw->filename_org = GENERAL[_ana]->ROI[i]->name + ".jpg";
             }
             else
             {
-                zw->filename = GENERAL[_ana]->name + "_" + GENERAL[_ana]->ROI[i]->name + ".bmp";
+                zw->filename = GENERAL[_ana]->name + "_" + GENERAL[_ana]->ROI[i]->name + ".jpg";
                 zw->filename_org = GENERAL[_ana]->name + "_" + GENERAL[_ana]->ROI[i]->name + ".jpg";
             }
 
@@ -621,10 +896,12 @@ std::vector<HTMLInfo*> ClassFlowCNNGeneral::GetHTMLInfo()
     return result;
 }
 
-int ClassFlowCNNGeneral::getAnzahlGENERAL()
+
+int ClassFlowCNNGeneral::getNumberGENERAL()
 {
     return GENERAL.size();
 }
+
 
 string ClassFlowCNNGeneral::getNameGENERAL(int _analog)
 {
@@ -634,6 +911,7 @@ string ClassFlowCNNGeneral::getNameGENERAL(int _analog)
     return "GENERAL DOES NOT EXIST";
 }
 
+
 general* ClassFlowCNNGeneral::GetGENERAL(int _analog)
 {
     if (_analog < GENERAL.size())
@@ -641,7 +919,6 @@ general* ClassFlowCNNGeneral::GetGENERAL(int _analog)
 
     return NULL;
 }
-
 
 
 void ClassFlowCNNGeneral::UpdateNameNumbers(std::vector<std::string> *_name_numbers)
@@ -659,3 +936,35 @@ void ClassFlowCNNGeneral::UpdateNameNumbers(std::vector<std::string> *_name_numb
             (*_name_numbers).push_back(_name);
     }
 }
+
+
+string ClassFlowCNNGeneral::getReadoutRawString(int _analog) 
+{
+    string rt = "";
+
+    if (_analog >= GENERAL.size() || GENERAL[_analog]==NULL || GENERAL[_analog]->ROI.size() == 0)
+        return rt;
+ 
+    for (int i = 0; i < GENERAL[_analog]->ROI.size(); ++i)
+    {
+        if (CNNType == Analogue || CNNType == Analogue100)
+        {
+            rt = rt + "," + RundeOutput(GENERAL[_analog]->ROI[i]->result_float, 1);
+        }
+
+        if (CNNType == Digital)
+        {
+            if (GENERAL[_analog]->ROI[i]->result_klasse == 10)
+                rt = rt + ",N";
+            else
+                rt = rt + "," + RundeOutput(GENERAL[_analog]->ROI[i]->result_klasse, 0);
+        }
+
+        if ((CNNType == DoubleHyprid10) || (CNNType == Digital100))
+        {
+            rt = rt + "," + RundeOutput(GENERAL[_analog]->ROI[i]->result_float, 1);
+        }
+    }
+    return rt;
+}
+

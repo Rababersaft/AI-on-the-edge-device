@@ -10,6 +10,61 @@
    
 
 ____
+#### #34 implement state and Roi for water leak detection
+for example see Roi on the next picture..
+![grafik](https://user-images.githubusercontent.com/38385805/207858812-2a6ba41d-1a8c-4fa1-9b6a-53cdd113c106.png)
+in case of position change between the measurments set this state to true, if there is no change set it back to false.
+In a defined time window this movement can lead into an alarm state / water leak..
+haveing this state in the mqtt broker can trigger functions like closing the ater pipe walve and so on...
+
+
+
+#### #33 Implement MATTER protocoll
+
+* see [#1404](https://github.com/jomjol/AI-on-the-edge-device/issues/1404)
+
+#### #32 Add feature to correct misinterpreted value
+
+* If a value is misinterpreted, the user can manually correct the value.
+* The misinterpreted ROIs would be saved in a "training data" -folder on the SD-card
+* Stretch goal: make sending of saved training data as easy as pushing a button =)
+
+#### #31 Implement InfluxDB v2.x interface
+
+* Currently only InfluxDB v1.x is supportet, extend to v2.x
+* Remark: interface has changed
+* see [#1160](https://github.com/jomjol/AI-on-the-edge-device/issues/1160)
+
+#### #30 Support meter clock over
+
+* In case of meter clocking over, that is, reaching its max. value and starting over from 0,
+  accept the new value and calculate correctly the difference.
+  (see line 739 onwards in ClassFlowPostProcessing.cpp)
+
+#### ~~#29 Add favicon and use the hostname for the website~~- implemented v11.3.1
+
+~~* https://github.com/jomjol/AI-on-the-edge-device/issues/927~~
+
+#### #28 Improved error handling for ROIs
+
+* In case a ROI is out of the image, there is no error message, but a non sense image is used
+* Implement a error message for wrong configuratioin of ROI
+
+#### #27 Use Homie Spec for Mqtt binding
+
+* Use the standardized Home Protocol for the Mqtt binding 
+* https://homieiot.github.io/
+
+#### #26 Changes behaviour for "N" replacement
+
+* in case the higher digits has already increased by minium 1 - don't set the "N" to the last value, but to "0"
+* https://github.com/jomjol/AI-on-the-edge-device/issues/792
+
+
+#### #25 Trigger Measurement via MQTT
+
+* https://github.com/jomjol/AI-on-the-edge-device/issues/727
+
 
 #### #24 Show Mqtt state directly in Webserver
 
@@ -24,9 +79,9 @@ ____
 
   
 
-#### #22 Direct hint to the different neural network files in the other repositories
+#### ~~#22 Direct hint to the different neural network files in the other repositories~~- implemented >v11.3.1
 
-* https://github.com/jomjol/AI-on-the-edge-device/issues/644
+~~* https://github.com/jomjol/AI-on-the-edge-device/issues/644~~
 
   
 
@@ -39,7 +94,10 @@ ____
 #### #20 Deep sleep and push mode
 
 * Let the device be normally in deep sleep state, and wake it up periodically to collect data and push it via MQTT or HTTP post.
+* Support ESP-NOW to reduce the overhead of connecting to wifi and mqtt 
+* the above should enable battery powered applications
 
+* An other way to set deep sleep would be to enable it in a specific period (at night).
   
 
 #### #19 Extended log informations
@@ -48,18 +106,15 @@ ____
 
   
 
-#### #18 Document WLAN-strength in web page
+#### ~~#18 Document WLAN-strength in web page~~
 
-* https://github.com/jomjol/AI-on-the-edge-device/issues/563
+* ~~https://github.com/jomjol/AI-on-the-edge-device/issues/563~~
 
 
 
-#### #17 Direct InfluxDB connection
+#### ~~#17 Direct InfluxDB connection~~
 
-* https://github.com/jomjol/AI-on-the-edge-device/issues/534
-* Direct interface to a InfluxDB data base
-* Integrate InfluxDB interface in firmware
-* Adapt html web page for configuration
+* ~~Done in v10.6.0~~
 
 
 #### #16 Serial Communication
@@ -83,13 +138,13 @@ ____
 
 
 
-#### #14 Backup and restore option for configuration
+#### ~~#14 Backup and restore option for configuration~~- implemented v11.3.1
 
-* https://github.com/jomjol/AI-on-the-edge-device/issues/459
+* ~~https://github.com/jomjol/AI-on-the-edge-device/issues/459~~
 
-* Implement a zip file compression for store and restore
+* ~~Implement a zip file compression for store and restore~~
 
-* Update the html to handle it
+* ~~Update the html to handle it~~
 
   
 
@@ -101,9 +156,9 @@ ____
 
   
 
-#### #12 Less reboots due to memory leakage
+#### ~~#12 Less reboots due to memory leakage~~
 
-* Issue: #414 & #425  #430
+* ~~Issue: #414 & #425  #430~~
 
   
 

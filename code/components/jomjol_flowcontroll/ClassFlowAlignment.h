@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef CLASSFLOWALIGNMENT_H
+#define CLASSFLOWALIGNMENT_H
+
 #include "ClassFlow.h"
 #include "Helper.h"
 #include "CAlignAndCutImage.h"
@@ -16,6 +19,7 @@ protected:
     float initalrotate;
     bool initialmirror;
     bool initialflip;
+    bool use_antialiasing;
     RefInfo References[2];
     int anz_ref;
     string namerawimage;
@@ -30,6 +34,9 @@ protected:
 
 public:
     CImageBasis *ImageBasis, *ImageTMP;
+    #ifdef ALGROI_LOAD_FROM_MEM_AS_JPG 
+    ImageData *AlgROI;
+    #endif
     
     ClassFlowAlignment(std::vector<ClassFlow*>* lfc);
 
@@ -43,3 +50,5 @@ public:
     string name(){return "ClassFlowAlignment";};
 };
 
+
+#endif //CLASSFLOWALIGNMENT_H

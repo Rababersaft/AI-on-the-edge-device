@@ -1,15 +1,33 @@
 #include "CFindTemplate.h"
 
 #include "ClassLogFile.h"
+#include "Helper.h"
+#include "../../include/defines.h"
+
+#include <esp_log.h>
+
+static const char* TAG = "C FIND TEMPL";
 
 // #define DEBUG_DETAIL_ON  
 
 
 bool CFindTemplate::FindTemplate(RefInfo *_ref)
 {
-    uint8_t* rgb_template = stbi_load(_ref->image_file.c_str(), &tpl_width, &tpl_height, &tpl_bpp, channels);
+    uint8_t* rgb_template;
 
-//    printf("FindTemplate 01\n");
+    if (file_size(_ref->image_file.c_str()) == 0) {
+        LogFile.WriteToFile(ESP_LOG_ERROR, TAG, _ref->image_file + " is empty!");
+        return false;
+    }
+   
+    rgb_template = stbi_load(_ref->image_file.c_str(), &tpl_width, &tpl_height, &tpl_bpp, channels);
+
+    if (rgb_template == NULL) {
+        LogFile.WriteToFile(ESP_LOG_ERROR, TAG, "Failed to load " + _ref->image_file + "! Is it corrupted?");
+        return false;
+    }
+
+//    ESP_LOGD(TAG, "FindTemplate 01");
 
     int ow, ow_start, ow_stop;
     int oh, oh_start, oh_stop;
@@ -45,32 +63,35 @@ bool CFindTemplate::FindTemplate(RefInfo *_ref)
     int min, max;
     bool isSimilar = false;
 
-//    printf("FindTemplate 02\n");
+//    ESP_LOGD(TAG, "FindTemplate 02");
 
     if ((_ref->alignment_algo == 2) && (_ref->fastalg_x > -1) && (_ref->fastalg_y > -1))     // für Testzwecke immer Berechnen
     {
         isSimilar = CalculateSimularities(rgb_template, _ref->fastalg_x, _ref->fastalg_y, ow, oh, min, avg, max, SAD, _ref->fastalg_SAD, _ref->fastalg_SAD_criteria);
-#ifdef DEBUG_DETAIL_ON  
+/*#ifdef DEBUG_DETAIL_ON
         std::string zw = "\t" + _ref->image_file + "\tt1_x_y:\t" + std::to_string(_ref->fastalg_x) + "\t" + std::to_string(_ref->fastalg_y);
         zw = zw + "\tpara1_found_min_avg_max_SAD:\t" + std::to_string(min) + "\t" + std::to_string(avg) + "\t" + std::to_string(max) + "\t"+ std::to_string(SAD);
         LogFile.WriteToDedicatedFile("/sdcard/alignment.txt", zw);
-#endif
+#endif*/
     }
 
-//    printf("FindTemplate 03\n");
+//    ESP_LOGD(TAG, "FindTemplate 03");
 
 
     if (isSimilar)
     {
 #ifdef DEBUG_DETAIL_ON  
-        LogFile.WriteToFile("Use FastAlignment sucessfull");
+        LogFile.WriteToFile(ESP_LOG_INFO, TAG, "Use FastAlignment sucessfull");
 #endif
         _ref->found_x = _ref->fastalg_x;
         _ref->found_y = _ref->fastalg_y;
+
+        stbi_image_free(rgb_template);
+        
         return true;
     }
 
-//    printf("FindTemplate 04\n");
+//    ESP_LOGD(TAG, "FindTemplate 04");
 
 
     double aktSAD;
@@ -78,7 +99,7 @@ bool CFindTemplate::FindTemplate(RefInfo *_ref)
 
     RGBImageLock();
 
-//    printf("FindTemplate 05\n");
+//    ESP_LOGD(TAG, "FindTemplate 05");
     int xouter, youter, tpl_x, tpl_y, _ch;
     int _anzchannels = channels;
     if (_ref->alignment_algo == 0)  // 0 = "Default" (nur R-Kanal)
@@ -106,14 +127,14 @@ bool CFindTemplate::FindTemplate(RefInfo *_ref)
             }
         }
 
-//    printf("FindTemplate 06\n");
+//    ESP_LOGD(TAG, "FindTemplate 06");
 
 
     if (_ref->alignment_algo == 2)
         CalculateSimularities(rgb_template, _ref->found_x, _ref->found_y, ow, oh, min, avg, max, SAD, _ref->fastalg_SAD, _ref->fastalg_SAD_criteria);
 
 
-//    printf("FindTemplate 07\n");
+//    ESP_LOGD(TAG, "FindTemplate 07");
 
     _ref->fastalg_x = _ref->found_x;
     _ref->fastalg_y = _ref->found_y;
@@ -123,16 +144,16 @@ bool CFindTemplate::FindTemplate(RefInfo *_ref)
     _ref->fastalg_SAD = SAD;
 
     
-#ifdef DEBUG_DETAIL_ON  
+/*#ifdef DEBUG_DETAIL_ON
     std::string zw = "\t" + _ref->image_file + "\tt1_x_y:\t" + std::to_string(_ref->fastalg_x) + "\t" + std::to_string(_ref->fastalg_y);
     zw = zw + "\tpara1_found_min_avg_max_SAD:\t" + std::to_string(min) + "\t" + std::to_string(avg) + "\t" + std::to_string(max) + "\t"+ std::to_string(SAD);
     LogFile.WriteToDedicatedFile("/sdcard/alignment.txt", zw);
-#endif
+#endif*/
 
     RGBImageRelease();
     stbi_image_free(rgb_template);
     
-//    printf("FindTemplate 08\n");
+//    ESP_LOGD(TAG, "FindTemplate 08");
 
     return false;
 }
@@ -173,7 +194,7 @@ bool CFindTemplate::CalculateSimularities(uint8_t* _rgb_tmpl, int _startx, int _
 
     float _SADdif = abs(SAD - _SADold);
 
-    printf("Anzahl %ld, avgDifSum %fd, avg %f, SAD_neu: %fd, _SAD_old: %f, _SAD_crit:%f\n", anz, avgDifSum, avg, SAD, _SADold, _SADdif);
+    ESP_LOGD(TAG, "Anzahl %ld, avgDifSum %fd, avg %f, SAD_neu: %fd, _SAD_old: %f, _SAD_crit:%f", anz, avgDifSum, avg, SAD, _SADold, _SADdif);
 
     if (_SADdif <= _SADcrit)
         return true;

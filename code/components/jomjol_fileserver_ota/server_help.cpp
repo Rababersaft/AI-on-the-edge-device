@@ -21,28 +21,49 @@ extern "C" {
 
 #include "esp_http_server.h"
 
-
-static const char *TAG = "serverhelp";
-
-#define SCRATCH_BUFSIZE  8192 
-char scratch[SCRATCH_BUFSIZE];
+#include "../../include/defines.h"
 
 
-#define IS_FILE_EXT(filename, ext) \
-    (strcasecmp(&filename[strlen(filename) - sizeof(ext) + 1], ext) == 0)
+static const char *TAG = "SERVER HELP";
+
+char scratch[SERVER_HELPER_SCRATCH_BUFSIZE];
+
+
+bool endsWith(std::string const &str, std::string const &suffix) {
+    if (str.length() < suffix.length()) {
+        return false;
+    }
+    return str.compare(str.length() - suffix.length(), suffix.length(), suffix) == 0;
+}
 
 
 esp_err_t send_file(httpd_req_t *req, std::string filename)
 {
-    FILE *fd = OpenFileAndWait(filename.c_str(), "r");
+    FILE *fd = fopen(filename.c_str(), "r");
     if (!fd) {
-        ESP_LOGE(TAG, "Failed to read existing file : %s", filename.c_str());
-        /* Respond with 500 Internal Server Error */
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to read existing file");
+        ESP_LOGE(TAG, "Failed to read file: %s", filename.c_str());
+        /* Respond with 404 Error */
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, get404());
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Sending file : %s ...", filename.c_str());
+    ESP_LOGD(TAG, "Sending file: %s ...", filename.c_str());
+//    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+    /* For all files with the following file extention tell
+       the webbrowser to cache them for 24h */
+    if (endsWith(filename, ".html") ||
+        endsWith(filename, ".htm") ||
+        endsWith(filename, ".css") ||
+        endsWith(filename, ".js") ||
+        endsWith(filename, ".map") ||
+        endsWith(filename, ".jpg") ||
+        endsWith(filename, ".jpeg") ||
+        endsWith(filename, ".ico") ||
+        endsWith(filename, ".png")) {
+        httpd_resp_set_hdr(req, "Cache-Control", "max-age=86400");
+    }
+
     set_content_type_from_file(req, filename.c_str());
 
     /* Retrieve the pointer to scratch buffer for temporary storage */
@@ -50,7 +71,7 @@ esp_err_t send_file(httpd_req_t *req, std::string filename)
     size_t chunksize;
     do {
         /* Read file in chunks into the scratch buffer */
-        chunksize = fread(chunk, 1, SCRATCH_BUFSIZE, fd);
+        chunksize = fread(chunk, 1, SERVER_HELPER_SCRATCH_BUFSIZE, fd);
 
         /* Send the buffer contents as HTTP response chunk */
         if (httpd_resp_send_chunk(req, chunk, chunksize) != ESP_OK) {
@@ -68,7 +89,7 @@ esp_err_t send_file(httpd_req_t *req, std::string filename)
 
     /* Close file after sending complete */
     fclose(fd);
-    ESP_LOGI(TAG, "File sending complete");    
+    ESP_LOGD(TAG, "File sending complete");    
     return ESP_OK;    
 }
 
@@ -120,6 +141,8 @@ esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filename)
         return httpd_resp_set_type(req, "image/x-icon");
     } else if (IS_FILE_EXT(filename, ".js")) {
         return httpd_resp_set_type(req, "text/javascript");
+    } else if (IS_FILE_EXT(filename, ".css")) {
+        return httpd_resp_set_type(req, "text/css");
     }
     /* This is a limited set only */
     /* For any other type always set as plain text */
